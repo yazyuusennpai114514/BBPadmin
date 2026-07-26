@@ -37,8 +37,18 @@
   <p class="status" id="status"></p>
 
   <section>
+    <h2>プラットフォーム設定</h2>
+    <p class="status">企業側の画面に表示される、報奨金の送金先と手数料率です。</p>
+    <div class="key-bar">
+      <input id="settings-paypal" type="text" placeholder="PayPal送金先（例: paypal.me/yourname）">
+      <input id="settings-fee" type="number" min="0" max="100" step="0.1" placeholder="手数料%" style="flex:0 0 100px">
+      <button id="save-settings-btn">保存</button>
+    </div>
+  </section>
+
+  <section>
     <h2>支払い待ち（ハンターへの送金）</h2>
-    <p class="status">報奨金が設定済み・未払いのレポート一覧です。手数料10%を差し引いた金額をハンターのPayPal先に送金してください。</p>
+    <p class="status">報奨金が設定済み・未払いのレポート一覧です。手数料を差し引いた金額をハンターのPayPal先に送金してください。</p>
     <table id="unpaid-table">
       <thead><tr><th>企業</th><th>ハンター</th><th>PayPal先</th><th>総額</th><th>手数料</th><th>送金額</th><th></th></tr></thead>
       <tbody></tbody>
@@ -90,13 +100,14 @@
     setStatus("読み込み中…");
 
     try {
-      const [programsRes, huntersRes, unpaidRes] = await Promise.all([
+      const [programsRes, huntersRes, unpaidRes, settingsRes] = await Promise.all([
         fetch(`${API_BASE}/admin/programs`, { headers: { "X-Admin-Key": key } }),
         fetch(`${API_BASE}/admin/hunters`, { headers: { "X-Admin-Key": key } }),
         fetch(`${API_BASE}/admin/reports/unpaid`, { headers: { "X-Admin-Key": key } }),
+        fetch(`${API_BASE}/admin/settings`, { headers: { "X-Admin-Key": key } }),
       ]);
 
-      if (programsRes.status === 401 || huntersRes.status === 401 || unpaidRes.status === 401) {
+      if (programsRes.status === 401 || huntersRes.status === 401 || unpaidRes.status === 401 || settingsRes.status === 401) {
         setStatus("キーが正しくありません");
         return;
       }
@@ -104,10 +115,13 @@
       const programs = (await programsRes.json()).programs || [];
       const hunters = (await huntersRes.json()).hunters || [];
       const unpaid = (await unpaidRes.json()).reports || [];
+      const settings = await settingsRes.json();
 
       renderTable("programs", programs, (p) => [p.id, p.company_name, p.contact_email, fmt(p.created_at)]);
       renderTable("hunters", hunters, (h) => [h.id, h.handle, h.email, h.paypal_link || "（未登録）", fmt(h.created_at)]);
       renderUnpaid(unpaid);
+      document.getElementById("settings-paypal").value = settings.paypalLink || "";
+      document.getElementById("settings-fee").value = settings.feePercent != null ? settings.feePercent : 10;
 
       setStatus(`最終更新: ${new Date().toLocaleTimeString("ja-JP")}`);
     } catch (e) {
@@ -200,6 +214,25 @@
   }
 
   document.getElementById("load-btn").addEventListener("click", loadAll);
+
+  document.getElementById("save-settings-btn").addEventListener("click", async () => {
+    const key = getKey();
+    if (!key) { setStatus("管理者キーを入力してください"); return; }
+    const paypalLink = document.getElementById("settings-paypal").value.trim();
+    const feePercent = Number(document.getElementById("settings-fee").value);
+    try {
+      const res = await fetch(`${API_BASE}/admin/settings`, {
+        method: "PATCH",
+        headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+        body: JSON.stringify({ paypalLink, feePercent }),
+      });
+      if (!res.ok) { setStatus("設定の保存に失敗しました"); return; }
+      setStatus("設定を保存しました");
+      loadAll();
+    } catch (e) {
+      setStatus("設定の保存に失敗しました: " + e.message);
+    }
+  });
   document.getElementById("admin-key").addEventListener("keydown", (e) => {
     if (e.key === "Enter") loadAll();
   });
