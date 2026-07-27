@@ -38,10 +38,13 @@
 
   <section>
     <h2>プラットフォーム設定</h2>
-    <p class="status">企業側の画面に表示される、報奨金の送金先と手数料率です。</p>
+    <p class="status">企業側の画面に表示される、報奨金の送金先と手数料率。支払い申請の通知先メールも設定できます。</p>
     <div class="key-bar">
       <input id="settings-paypal" type="text" placeholder="PayPal送金先（例: paypal.me/yourname）">
       <input id="settings-fee" type="number" min="0" max="100" step="0.1" placeholder="手数料%" style="flex:0 0 100px">
+    </div>
+    <div class="key-bar">
+      <input id="settings-admin-email" type="email" placeholder="支払い申請の通知先メールアドレス（あなたのメール）">
       <button id="save-settings-btn">保存</button>
     </div>
   </section>
@@ -122,6 +125,7 @@
       renderUnpaid(unpaid);
       document.getElementById("settings-paypal").value = settings.paypalLink || "";
       document.getElementById("settings-fee").value = settings.feePercent != null ? settings.feePercent : 10;
+      document.getElementById("settings-admin-email").value = settings.adminEmail || "";
 
       setStatus(`最終更新: ${new Date().toLocaleTimeString("ja-JP")}`);
     } catch (e) {
@@ -137,9 +141,13 @@
 
     rows.forEach((r) => {
       const tr = document.createElement("tr");
+      if (r.hunter_payout_requested_at) tr.style.background = "color-mix(in srgb, var(--accent) 12%, transparent)";
+      const requestedBadge = r.hunter_payout_requested_at
+        ? `<br><span style="color:var(--accent); font-size:0.72rem">申請あり</span>`
+        : "";
       tr.innerHTML = `
         <td>${esc(r.program_company_name)}</td>
-        <td>${esc(r.hunter_handle || "不明")}</td>
+        <td>${esc(r.hunter_handle || "不明")}${requestedBadge}</td>
         <td>${esc(r.hunter_paypal_link || "未登録")}</td>
         <td>¥${Number(r.gross_amount).toLocaleString()}</td>
         <td>¥${Number(r.platform_fee).toLocaleString()}</td>
@@ -220,11 +228,12 @@
     if (!key) { setStatus("管理者キーを入力してください"); return; }
     const paypalLink = document.getElementById("settings-paypal").value.trim();
     const feePercent = Number(document.getElementById("settings-fee").value);
+    const adminEmail = document.getElementById("settings-admin-email").value.trim();
     try {
       const res = await fetch(`${API_BASE}/admin/settings`, {
         method: "PATCH",
         headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
-        body: JSON.stringify({ paypalLink, feePercent }),
+        body: JSON.stringify({ paypalLink, feePercent, adminEmail }),
       });
       if (!res.ok) { setStatus("設定の保存に失敗しました"); return; }
       setStatus("設定を保存しました");
