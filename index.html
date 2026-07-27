@@ -57,16 +57,6 @@
   </section>
 
   <section>
-    <h2>VDP 月額支払い管理</h2>
-    <p class="status">支払いが2ヶ月無いと自動的に一時停止（公開一覧から非表示・新規レポート受付停止）になります。</p>
-    <table id="vdp-table">
-      <thead><tr><th>企業</th><th>状態</th><th>最終支払い</th><th></th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <p class="empty" id="vdp-empty" style="display:none">VDPプログラムはありません</p>
-  </section>
-
-  <section>
     <h2>企業（プログラム）</h2>
     <table id="programs-table">
       <thead><tr><th>ID</th><th>会社名</th><th>メール</th><th>登録日</th><th></th></tr></thead>
@@ -130,7 +120,6 @@
       renderTable("programs", programs, (p) => [p.id, p.company_name, p.contact_email, fmt(p.created_at)]);
       renderTable("hunters", hunters, (h) => [h.id, h.handle, h.email, h.paypal_link || "（未登録）", fmt(h.created_at)]);
       renderUnpaid(unpaid);
-      renderVdp(programs.filter((p) => p.program_type === "vdp"));
       document.getElementById("settings-paypal").value = settings.paypalLink || "";
       document.getElementById("settings-fee").value = settings.feePercent != null ? settings.feePercent : 10;
 
@@ -176,48 +165,6 @@
       });
       if (!res.ok) { setStatus("更新に失敗しました"); return; }
       setStatus("支払い済みにしました");
-      loadAll();
-    } catch (e) {
-      setStatus("更新に失敗しました: " + e.message);
-    }
-  }
-
-  function renderVdp(rows) {
-    const tbody = document.querySelector("#vdp-table tbody");
-    const emptyEl = document.getElementById("vdp-empty");
-    tbody.innerHTML = "";
-    emptyEl.style.display = rows.length === 0 ? "block" : "none";
-
-    rows.forEach((p) => {
-      const tr = document.createElement("tr");
-      const statusLabel = p.is_suspended
-        ? `<span style="color:var(--critical)">一時停止中</span>`
-        : `<span style="color:var(--accent)">有効</span>`;
-      const actionLabel = p.is_suspended ? "復活させる（¥3,000）" : "月額支払いを記録（¥500）";
-      tr.innerHTML = `
-        <td>${esc(p.company_name)}</td>
-        <td>${statusLabel}</td>
-        <td>${p.last_paid_at ? fmt(p.last_paid_at) : "未払い"}</td>
-        <td><button data-id="${esc(p.id)}">${actionLabel}</button></td>
-      `;
-      tbody.appendChild(tr);
-    });
-
-    tbody.querySelectorAll("button[data-id]").forEach((btn) => {
-      btn.addEventListener("click", () => recordPayment(btn.dataset.id));
-    });
-  }
-
-  async function recordPayment(programId) {
-    if (!confirm("実際にPayPalでの入金を確認してから押してください。支払い日を今日にリセットします。よろしいですか？")) return;
-    const key = getKey();
-    try {
-      const res = await fetch(`${API_BASE}/admin/programs/${programId}/record-payment`, {
-        method: "POST",
-        headers: { "X-Admin-Key": key },
-      });
-      if (!res.ok) { setStatus("更新に失敗しました"); return; }
-      setStatus("支払いを記録しました");
       loadAll();
     } catch (e) {
       setStatus("更新に失敗しました: " + e.message);
