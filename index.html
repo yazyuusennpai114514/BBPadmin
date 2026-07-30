@@ -26,6 +26,13 @@
   td.id { font-family: monospace; font-size: 0.72rem; color: var(--text-muted); }
   .empty { color: var(--text-muted); padding: 1rem 0; }
   .status { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; }
+  textarea, select { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 0.6rem 0.8rem; border-radius: 6px; font-family: inherit; width: 100%; }
+  .ticket-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; }
+  .thread { display: flex; flex-direction: column; gap: 0.6rem; margin: 1rem 0; }
+  .bubble { padding: 0.7rem 0.9rem; border-radius: 8px; border: 1px solid var(--border); background: #10182A; max-width: 85%; font-size: 0.85rem; }
+  .bubble.admin { align-self: flex-end; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .bubble-meta { font-family: monospace; font-size: 0.68rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+  .row { display: flex; gap: 0.6rem; align-items: center; }
 </style>
 </head>
 <body>
@@ -35,6 +42,16 @@
     <button id="load-btn">読み込む</button>
   </div>
   <p class="status" id="status"></p>
+
+  <section>
+    <h2>サポートチケット</h2>
+    <table id="tickets-table">
+      <thead><tr><th>件名</th><th>名前</th><th>メール</th><th>ステータス</th><th>送信日</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="empty" id="tickets-empty" style="display:none">チケットはありません</p>
+    <div id="ticket-detail" style="margin-top:1.5rem"></div>
+  </section>
 
   <section>
     <h2>プラットフォーム設定</h2>
@@ -103,14 +120,15 @@
     setStatus("読み込み中…");
 
     try {
-      const [programsRes, huntersRes, unpaidRes, settingsRes] = await Promise.all([
+      const [programsRes, huntersRes, unpaidRes, settingsRes, ticketsRes] = await Promise.all([
         fetch(`${API_BASE}/admin/programs`, { headers: { "X-Admin-Key": key } }),
         fetch(`${API_BASE}/admin/hunters`, { headers: { "X-Admin-Key": key } }),
         fetch(`${API_BASE}/admin/reports/unpaid`, { headers: { "X-Admin-Key": key } }),
         fetch(`${API_BASE}/admin/settings`, { headers: { "X-Admin-Key": key } }),
+        fetch(`${API_BASE}/admin/support/tickets`, { headers: { "X-Admin-Key": key } }),
       ]);
 
-      if (programsRes.status === 401 || huntersRes.status === 401 || unpaidRes.status === 401 || settingsRes.status === 401) {
+      if (programsRes.status === 401 || huntersRes.status === 401 || unpaidRes.status === 401 || settingsRes.status === 401 || ticketsRes.status === 401) {
         setStatus("キーが正しくありません");
         return;
       }
@@ -119,10 +137,12 @@
       const hunters = (await huntersRes.json()).hunters || [];
       const unpaid = (await unpaidRes.json()).reports || [];
       const settings = await settingsRes.json();
+      const tickets = (await ticketsRes.json()).tickets || [];
 
       renderTable("programs", programs, (p) => [p.id, p.company_name, p.contact_email, fmt(p.created_at)]);
       renderTable("hunters", hunters, (h) => [h.id, h.handle, h.email, h.paypal_link || "（未登録）", h.points || 0, fmt(h.created_at)]);
       renderUnpaid(unpaid);
+      renderTickets(tickets);
       document.getElementById("settings-paypal").value = settings.paypalLink || "";
       document.getElementById("settings-fee").value = settings.feePercent != null ? settings.feePercent : 10;
       document.getElementById("settings-admin-email").value = settings.adminEmail || "";
@@ -176,6 +196,101 @@
       loadAll();
     } catch (e) {
       setStatus("更新に失敗しました: " + e.message);
+    }
+  }
+
+  const TICKET_STATUSES = ["未対応", "対応中", "解決済み"];
+
+  function renderTickets(rows) {
+    const tbody = document.querySelector("#tickets-table tbody");
+    const emptyEl = document.getElementById("tickets-empty");
+    tbody.innerHTML = "";
+    emptyEl.style.display = rows.length === 0 ? "block" : "none";
+
+    rows.forEach((t) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${esc(t.subject)}</td>
+        <td>${esc(t.name)}</td>
+        <td>${esc(t.email)}</td>
+        <td>${esc(t.status)}</td>
+        <td>${fmt(t.created_at)}</td>
+        <td><button data-id="${esc(t.id)}">開く</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll("button[data-id]").forEach((btn) => {
+      btn.addEventListener("click", () => openTicket(btn.dataset.id));
+    });
+  }
+
+  async function openTicket(ticketId) {
+    const key = getKey();
+    const detailEl = document.getElementById("ticket-detail");
+    detailEl.innerHTML = `<p class="status">読み込み中…</p>`;
+    try {
+      const res = await fetch(`${API_BASE}/admin/support/tickets/${ticketId}`, { headers: { "X-Admin-Key": key } });
+      if (!res.ok) { detailEl.innerHTML = `<p class="status">読み込みに失敗しました</p>`; return; }
+      const data = await res.json();
+      const t = data.ticket;
+      const replies = data.replies || [];
+
+      detailEl.innerHTML = `
+        <div class="ticket-panel">
+          <div class="row" style="justify-content:space-between">
+            <strong>${esc(t.subject)}</strong>
+            <span class="status" style="margin:0">${esc(t.name)} (${esc(t.email)})</span>
+          </div>
+          <div class="thread">
+            <div class="bubble">
+              <div class="bubble-meta">${esc(t.name)} ・ ${fmt(t.created_at)}</div>
+              ${esc(t.message)}
+            </div>
+            ${replies.map((r) => `
+              <div class="bubble${r.author_type === "admin" ? " admin" : ""}">
+                <div class="bubble-meta">${r.author_type === "admin" ? "運営者" : esc(t.name)} ・ ${fmt(r.created_at)}</div>
+                ${esc(r.message)}
+              </div>
+            `).join("")}
+          </div>
+          <div class="row" style="margin-bottom:0.75rem">
+            <select id="ticket-status">
+              ${TICKET_STATUSES.map((s) => `<option value="${s}"${s === t.status ? " selected" : ""}>${s}</option>`).join("")}
+            </select>
+            <button id="ticket-status-save" class="ghost">ステータスを更新</button>
+          </div>
+          <textarea id="ticket-reply-text" rows="4" placeholder="返信内容を入力"></textarea>
+          <div class="row" style="margin-top:0.6rem">
+            <button id="ticket-reply-send">返信を送信</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("ticket-status-save").addEventListener("click", async () => {
+        const status = document.getElementById("ticket-status").value;
+        const r = await fetch(`${API_BASE}/admin/support/tickets/${ticketId}`, {
+          method: "PATCH",
+          headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        if (r.ok) { setStatus("ステータスを更新しました"); loadAll().then(() => openTicket(ticketId)); }
+        else setStatus("更新に失敗しました");
+      });
+
+      document.getElementById("ticket-reply-send").addEventListener("click", async () => {
+        const message = document.getElementById("ticket-reply-text").value.trim();
+        if (!message) return;
+        const r = await fetch(`${API_BASE}/admin/support/tickets/${ticketId}/replies`, {
+          method: "POST",
+          headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        });
+        if (r.ok) { setStatus("返信しました"); loadAll().then(() => openTicket(ticketId)); }
+        else setStatus("送信に失敗しました");
+      });
+    } catch (e) {
+      detailEl.innerHTML = `<p class="status">読み込みに失敗しました: ${e.message}</p>`;
     }
   }
 
