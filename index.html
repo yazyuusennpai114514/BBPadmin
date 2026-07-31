@@ -45,11 +45,12 @@
 
   <section>
     <h2>サポートチケット</h2>
+    <p class="status">「解決済み」のチケットはここには表示されません。</p>
     <table id="tickets-table">
       <thead><tr><th>件名</th><th>名前</th><th>メール</th><th>ステータス</th><th>送信日</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
-    <p class="empty" id="tickets-empty" style="display:none">チケットはありません</p>
+    <p class="empty" id="tickets-empty" style="display:none">未対応・対応中のチケットはありません</p>
     <div id="ticket-detail" style="margin-top:1.5rem"></div>
   </section>
 
@@ -204,10 +205,11 @@
   function renderTickets(rows) {
     const tbody = document.querySelector("#tickets-table tbody");
     const emptyEl = document.getElementById("tickets-empty");
+    const visibleRows = rows.filter((t) => t.status !== "解決済み");
     tbody.innerHTML = "";
-    emptyEl.style.display = rows.length === 0 ? "block" : "none";
+    emptyEl.style.display = visibleRows.length === 0 ? "block" : "none";
 
-    rows.forEach((t) => {
+    visibleRows.forEach((t) => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${esc(t.subject)}</td>
