@@ -102,6 +102,19 @@
     <div style="display:flex;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap">
       <button id="ctf-load-btn" class="ghost">問題一覧を読み込む</button>
       <button id="ctf-add-btn">＋ 新しい問題を追加</button>
+      <button id="ctf-bulk-btn" class="ghost">📋 一括登録（JSON）</button>
+    </div>
+
+    <!-- 一括登録フォーム -->
+    <div id="ctf-bulk-form" style="display:none;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:1.5rem">
+      <h3 style="margin:0 0 0.75rem;font-size:0.95rem">一括登録（JSON）</h3>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem">register_challenges.js と同じ形式の配列JSONを貼り付けてください。</p>
+      <textarea id="ctf-bulk-json" rows="12" placeholder='[{"title":"問題名","description":"説明","difficulty":"easy","category":"curl","flag":"FLAG{...}","points":10,"commands":[{"command":"curl http://target.ctf","response":"レスポンス"}]}]'></textarea>
+      <div style="display:flex;gap:0.6rem;margin-top:0.75rem;align-items:center">
+        <button id="ctf-bulk-run-btn">一括登録する</button>
+        <button class="ghost" id="ctf-bulk-cancel-btn">キャンセル</button>
+        <span class="status" id="ctf-bulk-status" style="margin:0"></span>
+      </div>
     </div>
 
     <!-- 問題追加フォーム -->
@@ -671,6 +684,60 @@
     document.getElementById("ctf-cmd-response").value = "";
     statusEl.textContent = "追加しました";
     loadCommands();
+  });
+
+  // =====================================================
+  // 一括登録
+  // =====================================================
+
+  document.getElementById("ctf-bulk-btn").addEventListener("click", () => {
+    document.getElementById("ctf-bulk-form").style.display = "block";
+  });
+  document.getElementById("ctf-bulk-cancel-btn").addEventListener("click", () => {
+    document.getElementById("ctf-bulk-form").style.display = "none";
+  });
+
+  document.getElementById("ctf-bulk-run-btn").addEventListener("click", async () => {
+    const statusEl = document.getElementById("ctf-bulk-status");
+    const text = document.getElementById("ctf-bulk-json").value.trim();
+    let challenges;
+    try {
+      challenges = JSON.parse(text);
+      if (!Array.isArray(challenges)) throw new Error("配列で入力してください");
+    } catch (e) {
+      statusEl.textContent = "JSONが不正です: " + e.message;
+      return;
+    }
+
+    statusEl.textContent = "登録中...";
+    let success = 0, fail = 0;
+
+    for (let i = 0; i < challenges.length; i++) {
+      const ch = challenges[i];
+      statusEl.textContent = `[${i+1}/${challenges.length}] "${ch.title}" を登録中...`;
+      const result = await ctfPost("/admin/challenges", {
+        title: ch.title,
+        description: ch.description || "",
+        difficulty: ch.difficulty || "easy",
+        category: ch.category || "curl",
+        flag: ch.flag,
+        points: ch.points || 10,
+        orderIndex: ch.orderIndex || i + 1,
+        isPublished: ch.isPublished !== false,
+      });
+      if (!result.id) { fail++; continue; }
+      for (const cmd of (ch.commands || [])) {
+        await ctfPost(`/admin/challenges/${result.id}/commands`, {
+          command: cmd.command,
+          response: cmd.response,
+          isExact: cmd.isExact !== false,
+        });
+      }
+      success++;
+    }
+
+    statusEl.textContent = `完了！ 成功: ${success}件 / 失敗: ${fail}件`;
+    loadChallenges();
   });
 
   document.getElementById("ctf-cmd-close").addEventListener("click", () => {
