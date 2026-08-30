@@ -95,6 +95,80 @@
     <p class="empty" id="hunters-empty" style="display:none">データがありません</p>
   </section>
 
+<section>
+    <h2>CTF 問題管理</h2>
+    <p class="status">curlチャレンジの問題を登録・管理します。</p>
+
+    <div style="display:flex;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap">
+      <button id="ctf-load-btn" class="ghost">問題一覧を読み込む</button>
+      <button id="ctf-add-btn">＋ 新しい問題を追加</button>
+    </div>
+
+    <!-- 問題追加フォーム -->
+    <div id="ctf-add-form" style="display:none;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:1.5rem">
+      <h3 style="margin:0 0 1rem;font-size:0.95rem">新しい問題</h3>
+      <div style="display:flex;flex-direction:column;gap:0.6rem">
+        <input id="ctf-title" placeholder="タイトル *">
+        <textarea id="ctf-desc" rows="4" placeholder="説明（マークダウン可）"></textarea>
+        <div style="display:flex;gap:0.6rem">
+          <select id="ctf-difficulty">
+            <option value="easy">初級 (easy)</option>
+            <option value="medium">中級 (medium)</option>
+            <option value="hard">上級 (hard)</option>
+          </select>
+          <select id="ctf-category">
+            <option value="curl">curl</option>
+            <option value="linux">Linux</option>
+            <option value="nmap">nmap</option>
+            <option value="gobuster">gobuster</option>
+            <option value="other">その他</option>
+          </select>
+          <input id="ctf-points" type="number" placeholder="ポイント" value="10" style="flex:0 0 100px">
+        </div>
+        <input id="ctf-flag" placeholder="フラグ（例: FLAG{...}）*">
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.88rem">
+          <input type="checkbox" id="ctf-published" checked>
+          公開する
+        </label>
+        <div style="display:flex;gap:0.6rem">
+          <button id="ctf-save-btn">保存</button>
+          <button class="ghost" id="ctf-cancel-btn">キャンセル</button>
+        </div>
+        <p class="status" id="ctf-form-status"></p>
+      </div>
+    </div>
+
+    <!-- 問題一覧 -->
+    <table id="ctf-table">
+      <thead><tr><th>ID</th><th>タイトル</th><th>難易度</th><th>ポイント</th><th>公開</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="empty" id="ctf-empty" style="display:none">問題がありません</p>
+
+    <!-- コマンド管理パネル -->
+    <div id="ctf-cmd-panel" style="display:none;margin-top:1.5rem;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.25rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h3 style="margin:0;font-size:0.95rem" id="ctf-cmd-title">コマンド管理</h3>
+        <button class="ghost" id="ctf-cmd-close" style="font-size:0.8rem;padding:0.3rem 0.6rem">閉じる</button>
+      </div>
+      <table id="ctf-cmd-table">
+        <thead><tr><th>コマンド</th><th>返答</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="ctf-cmd-empty" style="display:none">コマンドがありません</p>
+      <div style="margin-top:1rem;display:flex;flex-direction:column;gap:0.6rem">
+        <input id="ctf-cmd-command" placeholder="コマンド（例: curl http://target.ctf）*">
+        <textarea id="ctf-cmd-response" rows="4" placeholder="返答（表示するテキスト）*"></textarea>
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.88rem">
+          <input type="checkbox" id="ctf-cmd-exact" checked>
+          完全一致（チェックなしで前方一致）
+        </label>
+        <button id="ctf-cmd-add-btn">コマンドを追加</button>
+        <p class="status" id="ctf-cmd-status"></p>
+      </div>
+    </div>
+  </section>
+
 <script>
   const API_BASE = "https://api.bughunter.uk";
   const CTF_API = "https://ctfapi.bughunter.uk";
@@ -604,79 +678,5 @@
     currentChallengeId = null;
   });
 </script>
-  <section>
-    <h2>CTF 問題管理</h2>
-    <p class="status">curlチャレンジの問題を登録・管理します。</p>
-
-    <div style="display:flex;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap">
-      <button id="ctf-load-btn" class="ghost">問題一覧を読み込む</button>
-      <button id="ctf-add-btn">＋ 新しい問題を追加</button>
-    </div>
-
-    <!-- 問題追加フォーム -->
-    <div id="ctf-add-form" style="display:none;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:1.5rem">
-      <h3 style="margin:0 0 1rem;font-size:0.95rem">新しい問題</h3>
-      <div style="display:flex;flex-direction:column;gap:0.6rem">
-        <input id="ctf-title" placeholder="タイトル *">
-        <textarea id="ctf-desc" rows="4" placeholder="説明（マークダウン可）"></textarea>
-        <div style="display:flex;gap:0.6rem">
-          <select id="ctf-difficulty">
-            <option value="easy">初級 (easy)</option>
-            <option value="medium">中級 (medium)</option>
-            <option value="hard">上級 (hard)</option>
-          </select>
-          <select id="ctf-category">
-            <option value="curl">curl</option>
-            <option value="linux">Linux</option>
-            <option value="nmap">nmap</option>
-            <option value="gobuster">gobuster</option>
-            <option value="other">その他</option>
-          </select>
-          <input id="ctf-points" type="number" placeholder="ポイント" value="10" style="flex:0 0 100px">
-        </div>
-        <input id="ctf-flag" placeholder="フラグ（例: FLAG{...}）*">
-        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.88rem">
-          <input type="checkbox" id="ctf-published" checked>
-          公開する
-        </label>
-        <div style="display:flex;gap:0.6rem">
-          <button id="ctf-save-btn">保存</button>
-          <button class="ghost" id="ctf-cancel-btn">キャンセル</button>
-        </div>
-        <p class="status" id="ctf-form-status"></p>
-      </div>
-    </div>
-
-    <!-- 問題一覧 -->
-    <table id="ctf-table">
-      <thead><tr><th>ID</th><th>タイトル</th><th>難易度</th><th>ポイント</th><th>公開</th><th></th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <p class="empty" id="ctf-empty" style="display:none">問題がありません</p>
-
-    <!-- コマンド管理パネル -->
-    <div id="ctf-cmd-panel" style="display:none;margin-top:1.5rem;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.25rem">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-        <h3 style="margin:0;font-size:0.95rem" id="ctf-cmd-title">コマンド管理</h3>
-        <button class="ghost" id="ctf-cmd-close" style="font-size:0.8rem;padding:0.3rem 0.6rem">閉じる</button>
-      </div>
-      <table id="ctf-cmd-table">
-        <thead><tr><th>コマンド</th><th>返答</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <p class="empty" id="ctf-cmd-empty" style="display:none">コマンドがありません</p>
-      <div style="margin-top:1rem;display:flex;flex-direction:column;gap:0.6rem">
-        <input id="ctf-cmd-command" placeholder="コマンド（例: curl http://target.ctf）*">
-        <textarea id="ctf-cmd-response" rows="4" placeholder="返答（表示するテキスト）*"></textarea>
-        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.88rem">
-          <input type="checkbox" id="ctf-cmd-exact" checked>
-          完全一致（チェックなしで前方一致）
-        </label>
-        <button id="ctf-cmd-add-btn">コマンドを追加</button>
-        <p class="status" id="ctf-cmd-status"></p>
-      </div>
-    </div>
-  </section>
-
 </body>
 </html>
