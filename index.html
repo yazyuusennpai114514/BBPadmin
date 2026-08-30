@@ -97,6 +97,7 @@
 
 <script>
   const API_BASE = "https://api.bughunter.uk";
+  const CTF_API = "https://ctfapi.bughunter.uk";
 
   function fmt(ts) {
     const d = new Date(ts);
@@ -140,7 +141,7 @@
       const settings = await settingsRes.json();
       const tickets = (await ticketsRes.json()).tickets || [];
 
-      renderTable("programs", programs, (p) => [p.id, p.company_name, p.contact_email, fmt(p.created_at)]);
+      renderProgramsTable(programs);
       renderTable("hunters", hunters, (h) => [h.id, h.handle, h.email, h.paypal_link || "（未登録）", h.points || 0, fmt(h.created_at)]);
       renderUnpaid(unpaid);
       renderTickets(tickets);
@@ -296,6 +297,67 @@
     }
   }
 
+
+  const BADGE_OPTIONS = [
+    { key: "responsive",  label: "Responsive" },
+    { key: "high_reward", label: "High Reward" },
+    { key: "active",      label: "Active 🟢" },
+    { key: "safe_harbor", label: "Safe Harbor" },
+  ];
+
+  function renderProgramsTable(programs) {
+    const tbody = document.querySelector("#programs-table tbody");
+    const emptyEl = document.getElementById("programs-empty");
+    tbody.innerHTML = "";
+    emptyEl.style.display = programs.length === 0 ? "block" : "none";
+
+    programs.forEach((row) => {
+      const currentBadges = (() => { try { return JSON.parse(row.badges || "[]"); } catch { return []; } })();
+      const tr = document.createElement("tr");
+      const checkboxes = BADGE_OPTIONS.map((b) =>
+        `<label style="display:inline-flex;align-items:center;gap:0.2rem;margin-right:0.4rem;font-size:0.8rem;cursor:pointer;">
+          <input type="checkbox" data-badge="${esc(b.key)}" ${currentBadges.includes(b.key) ? "checked" : ""}> ${esc(b.label)}
+        </label>`
+      ).join("");
+
+      tr.innerHTML = `
+        <td class="id">${esc(row.id)}</td>
+        <td>${esc(row.company_name)}</td>
+        <td>${esc(row.contact_email)}</td>
+        <td>${esc(fmt(row.created_at))}</td>
+        <td>
+          <div style="display:flex;flex-wrap:wrap;gap:0.2rem;align-items:center;">
+            ${checkboxes}
+            <button class="badge-save" style="font-size:0.75rem;padding:0.2rem 0.5rem;" data-id="${esc(row.id)}">保存</button>
+          </div>
+        </td>
+        <td><button class="danger" data-type="programs" data-id="${esc(row.id)}">削除</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // バッジ保存ボタン
+    tbody.querySelectorAll("button.badge-save").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        const row = btn.closest("tr");
+        const checked = [...row.querySelectorAll("input[data-badge]:checked")].map((cb) => cb.dataset.badge);
+        const key = getKey();
+        const res = await fetch(`${API_BASE}/admin/programs/${id}/badges`, {
+          method: "PATCH",
+          headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+          body: JSON.stringify({ badges: checked }),
+        });
+        setStatus(res.ok ? "バッジを保存しました" : "バッジの保存に失敗しました");
+      });
+    });
+
+    // 削除ボタン
+    tbody.querySelectorAll("button.danger").forEach((btn) => {
+      btn.addEventListener("click", () => deleteEntry(btn.dataset.type, btn.dataset.id));
+    });
+  }
+
   function renderTable(type, rows, mapper) {
     const tbody = document.querySelector(`#${type}-table tbody`);
     const emptyEl = document.getElementById(`${type}-empty`);
@@ -369,6 +431,252 @@
     document.getElementById("admin-key").value = savedKey;
     loadAll();
   }
+
+  // =====================================================
+  // CTF 問題管理
+  // =====================================================
+
+  let currentChallengeId = null;
+
+  async function ctfGet(path) {
+    const key = getKey();
+    const res = await fetch(`${CTF_API}${path}`, { headers: { "X-Admin-Key": key } });
+    return res.json();
+  }
+
+  async function ctfPost(path, body) {
+    const key = getKey();
+    const res = await fetch(`${CTF_API}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": key },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  async function ctfPatch(path, body) {
+    const key = getKey();
+    const res = await fetch(`${CTF_API}${path}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": key },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  async function ctfDelete(path) {
+    const key = getKey();
+    const res = await fetch(`${CTF_API}${path}`, {
+      method: "DELETE",
+      headers: { "X-Admin-Key": key },
+    });
+    return res.json();
+  }
+
+  async function loadChallenges() {
+    const data = await ctfGet("/admin/challenges");
+    const challenges = data.challenges || [];
+    const tbody = document.querySelector("#ctf-table tbody");
+    const emptyEl = document.getElementById("ctf-empty");
+    tbody.innerHTML = "";
+    emptyEl.style.display = challenges.length === 0 ? "block" : "none";
+
+    challenges.forEach((ch) => {
+      const tr = document.createElement("tr");
+      const diffLabel = { easy: "初級", medium: "中級", hard: "上級" }[ch.difficulty] || ch.difficulty;
+      tr.innerHTML = `
+        <td class="id">${esc(String(ch.id))}</td>
+        <td>${esc(ch.title)}</td>
+        <td>${esc(diffLabel)}</td>
+        <td>${esc(String(ch.points))}</td>
+        <td>${ch.is_published ? "✅" : "🔒"}</td>
+        <td style="display:flex;gap:0.4rem">
+          <button class="ghost ctf-cmd-btn" data-id="${ch.id}" data-title="${esc(ch.title)}" style="font-size:0.78rem;padding:0.25rem 0.5rem">コマンド</button>
+          <button class="danger ctf-del-btn" data-id="${ch.id}" style="font-size:0.78rem;padding:0.25rem 0.5rem">削除</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll(".ctf-cmd-btn").forEach((btn) => {
+      btn.addEventListener("click", () => openCmdPanel(btn.dataset.id, btn.dataset.title));
+    });
+    tbody.querySelectorAll(".ctf-del-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm(`問題ID:${btn.dataset.id} を削除しますか？`)) return;
+        await ctfDelete(`/admin/challenges/${btn.dataset.id}`);
+        setStatus("問題を削除しました");
+        loadChallenges();
+      });
+    });
+  }
+
+  async function openCmdPanel(challengeId, title) {
+    currentChallengeId = challengeId;
+    document.getElementById("ctf-cmd-title").textContent = `コマンド管理: ${title}`;
+    document.getElementById("ctf-cmd-panel").style.display = "block";
+    await loadCommands();
+  }
+
+  async function loadCommands() {
+    if (!currentChallengeId) return;
+    const data = await ctfGet(`/admin/challenges/${currentChallengeId}/commands`);
+    const commands = data.commands || [];
+    const tbody = document.querySelector("#ctf-cmd-table tbody");
+    const emptyEl = document.getElementById("ctf-cmd-empty");
+    tbody.innerHTML = "";
+    emptyEl.style.display = commands.length === 0 ? "block" : "none";
+
+    commands.forEach((cmd) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="font-family:monospace;font-size:0.8rem">${esc(cmd.command)}</td>
+        <td style="font-size:0.8rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cmd.response)}</td>
+        <td><button class="danger ctf-cmd-del-btn" data-id="${cmd.id}" style="font-size:0.78rem;padding:0.25rem 0.5rem">削除</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll(".ctf-cmd-del-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await ctfDelete(`/admin/commands/${btn.dataset.id}`);
+        document.getElementById("ctf-cmd-status").textContent = "削除しました";
+        loadCommands();
+      });
+    });
+  }
+
+  // 問題追加フォーム
+  document.getElementById("ctf-add-btn").addEventListener("click", () => {
+    document.getElementById("ctf-add-form").style.display = "block";
+  });
+  document.getElementById("ctf-cancel-btn").addEventListener("click", () => {
+    document.getElementById("ctf-add-form").style.display = "none";
+  });
+  document.getElementById("ctf-load-btn").addEventListener("click", loadChallenges);
+
+  document.getElementById("ctf-save-btn").addEventListener("click", async () => {
+    const title = document.getElementById("ctf-title").value.trim();
+    const flag = document.getElementById("ctf-flag").value.trim();
+    const statusEl = document.getElementById("ctf-form-status");
+    if (!title || !flag) { statusEl.textContent = "タイトルとフラグは必須です"; return; }
+
+    const result = await ctfPost("/admin/challenges", {
+      title,
+      description: document.getElementById("ctf-desc").value.trim(),
+      difficulty: document.getElementById("ctf-difficulty").value,
+      category: document.getElementById("ctf-category").value,
+      points: Number(document.getElementById("ctf-points").value) || 10,
+      flag,
+      isPublished: document.getElementById("ctf-published").checked,
+    });
+
+    if (result.id) {
+      statusEl.textContent = `登録しました（ID: ${result.id}）`;
+      document.getElementById("ctf-add-form").style.display = "none";
+      loadChallenges();
+    } else {
+      statusEl.textContent = "登録に失敗しました";
+    }
+  });
+
+  // コマンド追加
+  document.getElementById("ctf-cmd-add-btn").addEventListener("click", async () => {
+    const command = document.getElementById("ctf-cmd-command").value.trim();
+    const response = document.getElementById("ctf-cmd-response").value;
+    const statusEl = document.getElementById("ctf-cmd-status");
+    if (!command || !response) { statusEl.textContent = "コマンドと返答は必須です"; return; }
+
+    await ctfPost(`/admin/challenges/${currentChallengeId}/commands`, {
+      command,
+      response,
+      isExact: document.getElementById("ctf-cmd-exact").checked,
+    });
+
+    document.getElementById("ctf-cmd-command").value = "";
+    document.getElementById("ctf-cmd-response").value = "";
+    statusEl.textContent = "追加しました";
+    loadCommands();
+  });
+
+  document.getElementById("ctf-cmd-close").addEventListener("click", () => {
+    document.getElementById("ctf-cmd-panel").style.display = "none";
+    currentChallengeId = null;
+  });
 </script>
+  <section>
+    <h2>CTF 問題管理</h2>
+    <p class="status">curlチャレンジの問題を登録・管理します。</p>
+
+    <div style="display:flex;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap">
+      <button id="ctf-load-btn" class="ghost">問題一覧を読み込む</button>
+      <button id="ctf-add-btn">＋ 新しい問題を追加</button>
+    </div>
+
+    <!-- 問題追加フォーム -->
+    <div id="ctf-add-form" style="display:none;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:1.5rem">
+      <h3 style="margin:0 0 1rem;font-size:0.95rem">新しい問題</h3>
+      <div style="display:flex;flex-direction:column;gap:0.6rem">
+        <input id="ctf-title" placeholder="タイトル *">
+        <textarea id="ctf-desc" rows="4" placeholder="説明（マークダウン可）"></textarea>
+        <div style="display:flex;gap:0.6rem">
+          <select id="ctf-difficulty">
+            <option value="easy">初級 (easy)</option>
+            <option value="medium">中級 (medium)</option>
+            <option value="hard">上級 (hard)</option>
+          </select>
+          <select id="ctf-category">
+            <option value="curl">curl</option>
+            <option value="linux">Linux</option>
+            <option value="nmap">nmap</option>
+            <option value="gobuster">gobuster</option>
+            <option value="other">その他</option>
+          </select>
+          <input id="ctf-points" type="number" placeholder="ポイント" value="10" style="flex:0 0 100px">
+        </div>
+        <input id="ctf-flag" placeholder="フラグ（例: FLAG{...}）*">
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.88rem">
+          <input type="checkbox" id="ctf-published" checked>
+          公開する
+        </label>
+        <div style="display:flex;gap:0.6rem">
+          <button id="ctf-save-btn">保存</button>
+          <button class="ghost" id="ctf-cancel-btn">キャンセル</button>
+        </div>
+        <p class="status" id="ctf-form-status"></p>
+      </div>
+    </div>
+
+    <!-- 問題一覧 -->
+    <table id="ctf-table">
+      <thead><tr><th>ID</th><th>タイトル</th><th>難易度</th><th>ポイント</th><th>公開</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="empty" id="ctf-empty" style="display:none">問題がありません</p>
+
+    <!-- コマンド管理パネル -->
+    <div id="ctf-cmd-panel" style="display:none;margin-top:1.5rem;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.25rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h3 style="margin:0;font-size:0.95rem" id="ctf-cmd-title">コマンド管理</h3>
+        <button class="ghost" id="ctf-cmd-close" style="font-size:0.8rem;padding:0.3rem 0.6rem">閉じる</button>
+      </div>
+      <table id="ctf-cmd-table">
+        <thead><tr><th>コマンド</th><th>返答</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="ctf-cmd-empty" style="display:none">コマンドがありません</p>
+      <div style="margin-top:1rem;display:flex;flex-direction:column;gap:0.6rem">
+        <input id="ctf-cmd-command" placeholder="コマンド（例: curl http://target.ctf）*">
+        <textarea id="ctf-cmd-response" rows="4" placeholder="返答（表示するテキスト）*"></textarea>
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.88rem">
+          <input type="checkbox" id="ctf-cmd-exact" checked>
+          完全一致（チェックなしで前方一致）
+        </label>
+        <button id="ctf-cmd-add-btn">コマンドを追加</button>
+        <p class="status" id="ctf-cmd-status"></p>
+      </div>
+    </div>
+  </section>
+
 </body>
 </html>
