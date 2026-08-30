@@ -1,320 +1,749 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>bughunter.uk — Learn</title>
-  <style>
-    :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --surface2: #1c2333;
-      --border: rgba(255,255,255,0.1);
-      --text: #e6edf3;
-      --text-muted: #8b949e;
-      --accent: #f0a500;
-      --accent-dim: rgba(240,165,0,0.12);
-      --green: #3fb950;
-      --critical: #f85149;
-      --radius: 10px;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
-    header { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--surface); }
-    .logo { color: var(--accent); font-weight: 700; font-size: 1rem; text-decoration: none; }
-    .header-right { display: flex; align-items: center; gap: 1rem; font-size: 0.85rem; }
-    .app { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 49px); }
-    .sidebar { width: 260px; min-width: 260px; border-right: 1px solid var(--border); overflow-y: auto; background: var(--surface); }
-    .sidebar-title { padding: 1rem; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); }
-    .challenge-item { padding: 0.75rem 1rem; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.1s; }
-    .challenge-item:hover { background: rgba(255,255,255,0.04); }
-    .challenge-item.active { background: var(--accent-dim); border-left: 3px solid var(--accent); }
-    .challenge-item-title { font-size: 0.88rem; font-weight: 500; }
-    .challenge-item-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; display: flex; gap: 0.5rem; align-items: center; }
-    .diff-badge { font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: 600; }
-    .diff-easy { background: rgba(63,185,80,0.2); color: var(--green); }
-    .diff-medium { background: rgba(240,165,0,0.2); color: var(--accent); }
-    .diff-hard { background: rgba(248,81,73,0.2); color: var(--critical); }
-    .check-icon { color: var(--green); }
-    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    .content-area { display: flex; flex: 1; overflow: hidden; }
-    .description-panel { width: 40%; min-width: 300px; border-right: 1px solid var(--border); overflow-y: auto; padding: 1.5rem; }
-    .challenge-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; }
-    .challenge-meta { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; }
-    .points-badge { font-size: 0.75rem; background: var(--accent-dim); color: var(--accent); padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; }
-    .description-text { font-size: 0.9rem; line-height: 1.8; white-space: pre-wrap; }
-    .description-text code { background: var(--surface2); padding: 0.1rem 0.35rem; border-radius: 4px; font-family: monospace; font-size: 0.85em; color: var(--accent); }
-    .flag-area { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
-    .flag-area h3 { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 0.75rem; }
-    .flag-input-row { display: flex; gap: 0.5rem; }
-    .flag-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 0.6rem 0.8rem; border-radius: 6px; font-family: monospace; font-size: 0.88rem; }
-    .flag-input:focus { outline: none; border-color: var(--accent); }
-    .btn-submit { background: var(--accent); color: #000; border: none; padding: 0.6rem 1.1rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.88rem; }
-    .btn-submit:disabled { opacity: 0.5; cursor: default; }
-    .flag-result { margin-top: 0.6rem; font-size: 0.85rem; }
-    .flag-result.correct { color: var(--green); }
-    .flag-result.wrong { color: var(--critical); }
-    .terminal-panel { flex: 1; display: flex; flex-direction: column; background: #0d1117; }
-    .terminal-header { padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; background: var(--surface2); }
-    .terminal-dots { display: flex; gap: 0.4rem; }
-    .terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
-    .dot-red { background: #ff5f57; }
-    .dot-yellow { background: #ffbd2e; }
-    .dot-green { background: #28c840; }
-    .terminal-title { font-size: 0.78rem; color: var(--text-muted); margin-left: 0.5rem; font-family: monospace; }
-    .terminal-body { flex: 1; overflow-y: auto; padding: 1rem; font-family: "Courier New", Courier, monospace; font-size: 0.85rem; line-height: 1.6; }
-    .terminal-line { margin-bottom: 0.2rem; }
-    .terminal-prompt { color: #3fb950; }
-    .terminal-cmd { color: var(--text); }
-    .terminal-output { color: #b4f0a0; white-space: pre-wrap; word-break: break-all; }
-    .terminal-error { color: var(--critical); white-space: pre-wrap; }
-    .terminal-input-row { display: flex; align-items: center; padding: 0.75rem 1rem; border-top: 1px solid var(--border); gap: 0.5rem; }
-    .terminal-prompt-label { color: #3fb950; font-family: monospace; font-size: 0.85rem; white-space: nowrap; }
-    .terminal-input { flex: 1; background: transparent; border: none; color: var(--text); font-family: "Courier New", Courier, monospace; font-size: 0.85rem; outline: none; }
-    .terminal-clear-btn { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 0.25rem 0.6rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
-    .terminal-clear-btn:hover { background: rgba(255,255,255,0.06); }
-    .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); gap: 0.5rem; }
-    .empty-state-icon { font-size: 2.5rem; }
-    .spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 2rem auto; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
+<meta charset="UTF-8">
+<title>BBP Admin</title>
+<style>
+  :root {
+    --bg: #0F1521; --panel: #161D2B; --border: #2A3349; --text: #E8EAF0;
+    --text-muted: #8994AC; --accent: #E8A33D; --critical: #E5484D;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", sans-serif;
+    max-width: 900px; margin: 3rem auto; padding: 0 1.5rem;
+  }
+  h1 { font-family: monospace; font-size: 1.3rem; }
+  .key-bar { display: flex; gap: 0.6rem; margin-bottom: 2rem; }
+  input { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 0.6rem 0.8rem; border-radius: 6px; flex: 1; font-family: monospace; }
+  button { background: var(--accent); color: #1A1204; border: none; padding: 0.6rem 1.1rem; border-radius: 6px; cursor: pointer; font-weight: 600; }
+  button.danger { background: var(--critical); color: #fff; }
+  button.ghost { background: none; border: 1px solid var(--border); color: var(--text); }
+  section { margin-bottom: 2.5rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+  td.id { font-family: monospace; font-size: 0.72rem; color: var(--text-muted); }
+  .empty { color: var(--text-muted); padding: 1rem 0; }
+  .status { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; }
+  textarea, select { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 0.6rem 0.8rem; border-radius: 6px; font-family: inherit; width: 100%; }
+  .ticket-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; }
+  .thread { display: flex; flex-direction: column; gap: 0.6rem; margin: 1rem 0; }
+  .bubble { padding: 0.7rem 0.9rem; border-radius: 8px; border: 1px solid var(--border); background: #10182A; max-width: 85%; font-size: 0.85rem; }
+  .bubble.admin { align-self: flex-end; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .bubble-meta { font-family: monospace; font-size: 0.68rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+  .row { display: flex; gap: 0.6rem; align-items: center; }
+</style>
 </head>
 <body>
-  <header>
-    <a class="logo" href="https://bughunter.uk">bughunter.uk / learn</a>
-    <div class="header-right">
-      <span id="login-status" style="color:var(--text-muted);font-size:0.85rem">未ログイン</span>
+  <h1>BBP Admin</h1>
+  <div class="key-bar">
+    <input id="admin-key" type="password" placeholder="管理者キーを入力">
+    <button id="load-btn">読み込む</button>
+  </div>
+  <p class="status" id="status"></p>
+
+  <section>
+    <h2>サポートチケット</h2>
+    <p class="status">「解決済み」のチケットはここには表示されません。</p>
+    <table id="tickets-table">
+      <thead><tr><th>件名</th><th>名前</th><th>メール</th><th>ステータス</th><th>送信日</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="empty" id="tickets-empty" style="display:none">未対応・対応中のチケットはありません</p>
+    <div id="ticket-detail" style="margin-top:1.5rem"></div>
+  </section>
+
+  <section>
+    <h2>プラットフォーム設定</h2>
+    <p class="status">企業側の画面に表示される、報奨金の送金先と手数料率。支払い申請の通知先メールも設定できます。</p>
+    <div class="key-bar">
+      <input id="settings-paypal" type="text" placeholder="PayPal送金先（例: paypal.me/yourname）">
+      <input id="settings-fee" type="number" min="0" max="100" step="0.1" placeholder="手数料%" style="flex:0 0 100px">
     </div>
-  </header>
-  <div class="app">
-    <div class="sidebar">
-      <div class="sidebar-title">チャレンジ</div>
-      <div id="challenge-list"><div class="spinner"></div></div>
+    <div class="key-bar">
+      <input id="settings-admin-email" type="email" placeholder="支払い申請の通知先メールアドレス（あなたのメール）">
+      <button id="save-settings-btn">保存</button>
     </div>
-    <div class="main">
-      <div class="content-area" id="content-area">
-        <div class="empty-state">
-          <div class="empty-state-icon">💻</div>
-          <p>チャレンジを選んでください</p>
-        </div>
+  </section>
+
+  <section>
+    <h2>支払い待ち（ハンターへの送金）</h2>
+    <p class="status">報奨金が設定済み・未払いのレポート一覧です。手数料を差し引いた金額をハンターのPayPal先に送金してください。</p>
+    <table id="unpaid-table">
+      <thead><tr><th>企業</th><th>ハンター</th><th>PayPal先</th><th>総額</th><th>手数料</th><th>送金額</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="empty" id="unpaid-empty" style="display:none">支払い待ちのレポートはありません</p>
+  </section>
+
+  <section>
+    <h2>企業（プログラム）</h2>
+    <table id="programs-table">
+      <thead><tr><th>ID</th><th>会社名</th><th>メール</th><th>登録日</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="empty" id="programs-empty" style="display:none">データがありません</p>
+  </section>
+
+  <section>
+    <h2>ハンター</h2>
+    <table id="hunters-table">
+      <thead><tr><th>ID</th><th>ハンドル</th><th>メール</th><th>PayPal先</th><th>ポイント</th><th>登録日</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="empty" id="hunters-empty" style="display:none">データがありません</p>
+  </section>
+
+<section>
+    <h2>CTF 問題管理</h2>
+    <p class="status">curlチャレンジの問題を登録・管理します。</p>
+
+    <div style="display:flex;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap">
+      <button id="ctf-load-btn" class="ghost">問題一覧を読み込む</button>
+      <button id="ctf-add-btn">＋ 新しい問題を追加</button>
+      <button id="ctf-bulk-btn" class="ghost">📋 一括登録（JSON）</button>
+    </div>
+
+    <!-- 一括登録フォーム -->
+    <div id="ctf-bulk-form" style="display:none;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:1.5rem">
+      <h3 style="margin:0 0 0.75rem;font-size:0.95rem">一括登録（JSON）</h3>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem">register_challenges.js と同じ形式の配列JSONを貼り付けてください。</p>
+      <textarea id="ctf-bulk-json" rows="12" placeholder='[{"title":"問題名","description":"説明","difficulty":"easy","category":"curl","flag":"FLAG{...}","points":10,"commands":[{"command":"curl http://target.ctf","response":"レスポンス"}]}]'></textarea>
+      <div style="display:flex;gap:0.6rem;margin-top:0.75rem;align-items:center">
+        <button id="ctf-bulk-run-btn">一括登録する</button>
+        <button class="ghost" id="ctf-bulk-cancel-btn">キャンセル</button>
+        <span class="status" id="ctf-bulk-status" style="margin:0"></span>
       </div>
     </div>
-  </div>
 
-  <script>
-    const CTF_API = "https://ctfapi.bughunter.uk";
-    let challenges = [], completions = new Set(), currentChallenge = null;
-    let cmdHistory = [], historyIdx = -1, sessionToken = null;
+    <!-- 問題追加フォーム -->
+    <div id="ctf-add-form" style="display:none;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:1.5rem">
+      <h3 style="margin:0 0 1rem;font-size:0.95rem">新しい問題</h3>
+      <div style="display:flex;flex-direction:column;gap:0.6rem">
+        <input id="ctf-title" placeholder="タイトル *">
+        <textarea id="ctf-desc" rows="4" placeholder="説明（マークダウン可）"></textarea>
+        <div style="display:flex;gap:0.6rem">
+          <select id="ctf-difficulty">
+            <option value="easy">初級 (easy)</option>
+            <option value="medium">中級 (medium)</option>
+            <option value="hard">上級 (hard)</option>
+          </select>
+          <select id="ctf-category">
+            <option value="curl">curl</option>
+            <option value="linux">Linux</option>
+            <option value="nmap">nmap</option>
+            <option value="gobuster">gobuster</option>
+            <option value="other">その他</option>
+          </select>
+          <input id="ctf-points" type="number" placeholder="ポイント" value="10" style="flex:0 0 100px">
+        </div>
+        <input id="ctf-flag" placeholder="フラグ（例: FLAG{...}）*">
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.88rem">
+          <input type="checkbox" id="ctf-published" checked>
+          公開する
+        </label>
+        <div style="display:flex;gap:0.6rem">
+          <button id="ctf-save-btn">保存</button>
+          <button class="ghost" id="ctf-cancel-btn">キャンセル</button>
+        </div>
+        <p class="status" id="ctf-form-status"></p>
+      </div>
+    </div>
 
-    function esc(s) {
-      return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-    }
+    <!-- 問題一覧 -->
+    <table id="ctf-table">
+      <thead><tr><th>ID</th><th>タイトル</th><th>難易度</th><th>ポイント</th><th>公開</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="empty" id="ctf-empty" style="display:none">問題がありません</p>
 
-    function getSession() {
-      try { return JSON.parse(localStorage.getItem("bbp_session") || "null"); } catch { return null; }
-    }
+    <!-- コマンド管理パネル -->
+    <div id="ctf-cmd-panel" style="display:none;margin-top:1.5rem;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.25rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h3 style="margin:0;font-size:0.95rem" id="ctf-cmd-title">コマンド管理</h3>
+        <button class="ghost" id="ctf-cmd-close" style="font-size:0.8rem;padding:0.3rem 0.6rem">閉じる</button>
+      </div>
+      <table id="ctf-cmd-table">
+        <thead><tr><th>コマンド</th><th>返答</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="ctf-cmd-empty" style="display:none">コマンドがありません</p>
+      <div style="margin-top:1rem;display:flex;flex-direction:column;gap:0.6rem">
+        <input id="ctf-cmd-command" placeholder="コマンド（例: curl http://target.ctf）*">
+        <textarea id="ctf-cmd-response" rows="4" placeholder="返答（表示するテキスト）*"></textarea>
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.88rem">
+          <input type="checkbox" id="ctf-cmd-exact" checked>
+          完全一致（チェックなしで前方一致）
+        </label>
+        <button id="ctf-cmd-add-btn">コマンドを追加</button>
+        <p class="status" id="ctf-cmd-status"></p>
+      </div>
+    </div>
+  </section>
 
-    async function init() {
-      const session = getSession();
-      if (session?.token && session?.userType === "hunter") {
-        sessionToken = session.token;
-        document.getElementById("login-status").textContent = "@" + (session.name || "ログイン中");
-      } else {
-        document.getElementById("login-status").innerHTML = '<a href="https://bughunter.uk" style="color:var(--accent)">ログインしてスコアを記録</a>';
-      }
+<script>
+  const API_BASE = "https://api.bughunter.uk";
+  const CTF_API = "https://ctfapi.bughunter.uk";
 
-      try {
-        const res = await fetch(`${CTF_API}/challenges`);
-        const data = await res.json();
-        challenges = data.challenges || [];
-      } catch {
-        document.getElementById("challenge-list").innerHTML = '<p style="padding:1rem;color:var(--critical);font-size:0.85rem">読み込みに失敗しました</p>';
+  function fmt(ts) {
+    const d = new Date(ts);
+    return d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0");
+  }
+  function esc(s) {
+    const div = document.createElement("div");
+    div.textContent = s == null ? "" : String(s);
+    return div.innerHTML;
+  }
+  function getKey() {
+    return document.getElementById("admin-key").value.trim();
+  }
+  function setStatus(msg) {
+    document.getElementById("status").textContent = msg;
+  }
+
+  async function loadAll() {
+    const key = getKey();
+    if (!key) { setStatus("管理者キーを入力してください"); return; }
+    localStorage.setItem("bbp_admin_key", key);
+    setStatus("読み込み中…");
+
+    try {
+      const [programsRes, huntersRes, unpaidRes, settingsRes, ticketsRes] = await Promise.all([
+        fetch(`${API_BASE}/admin/programs`, { headers: { "X-Admin-Key": key } }),
+        fetch(`${API_BASE}/admin/hunters`, { headers: { "X-Admin-Key": key } }),
+        fetch(`${API_BASE}/admin/reports/unpaid`, { headers: { "X-Admin-Key": key } }),
+        fetch(`${API_BASE}/admin/settings`, { headers: { "X-Admin-Key": key } }),
+        fetch(`${API_BASE}/admin/support/tickets`, { headers: { "X-Admin-Key": key } }),
+      ]);
+
+      if (programsRes.status === 401 || huntersRes.status === 401 || unpaidRes.status === 401 || settingsRes.status === 401 || ticketsRes.status === 401) {
+        setStatus("キーが正しくありません");
         return;
       }
 
-      if (sessionToken) {
-        try {
-          const res = await fetch(`${CTF_API}/my/completions`, { headers: { Authorization: `Bearer ${sessionToken}` } });
-          const data = await res.json();
-          (data.completions || []).forEach(c => completions.add(String(c.challenge_id)));
-        } catch {}
-      }
+      const programs = (await programsRes.json()).programs || [];
+      const hunters = (await huntersRes.json()).hunters || [];
+      const unpaid = (await unpaidRes.json()).reports || [];
+      const settings = await settingsRes.json();
+      const tickets = (await ticketsRes.json()).tickets || [];
 
-      renderSidebar();
+      renderProgramsTable(programs);
+      renderTable("hunters", hunters, (h) => [h.id, h.handle, h.email, h.paypal_link || "（未登録）", h.points || 0, fmt(h.created_at)]);
+      renderUnpaid(unpaid);
+      renderTickets(tickets);
+      document.getElementById("settings-paypal").value = settings.paypalLink || "";
+      document.getElementById("settings-fee").value = settings.feePercent != null ? settings.feePercent : 10;
+      document.getElementById("settings-admin-email").value = settings.adminEmail || "";
+
+      setStatus(`最終更新: ${new Date().toLocaleTimeString("ja-JP")}`);
+    } catch (e) {
+      setStatus("読み込みに失敗しました: " + e.message);
     }
+  }
 
-    function renderSidebar() {
-      const list = document.getElementById("challenge-list");
-      if (!challenges.length) { list.innerHTML = '<p style="padding:1rem;color:var(--text-muted);font-size:0.85rem">チャレンジがありません</p>'; return; }
-      const diffOrder = { easy:0, medium:1, hard:2 };
-      const sorted = [...challenges].sort((a,b) => (diffOrder[a.difficulty]??9)-(diffOrder[b.difficulty]??9) || Number(a.order_index)-Number(b.order_index));
-      list.innerHTML = sorted.map(ch => {
-        const done = completions.has(String(ch.id));
-        const diffLabel = { easy:"初級", medium:"中級", hard:"上級" }[ch.difficulty] || ch.difficulty;
-        return `<div class="challenge-item${done?" completed":""}" data-id="${ch.id}">
-          <div class="challenge-item-title">${done?'<span class="check-icon">✓ </span>':""}${esc(ch.title)}</div>
-          <div class="challenge-item-meta">
-            <span class="diff-badge diff-${esc(ch.difficulty)}">${esc(diffLabel)}</span>
-            <span>${esc(String(ch.points))}pt</span>
-          </div>
-        </div>`;
-      }).join("");
-      list.querySelectorAll(".challenge-item").forEach(el => {
-        el.addEventListener("click", () => selectChallenge(el.dataset.id));
+  function renderUnpaid(rows) {
+    const tbody = document.querySelector("#unpaid-table tbody");
+    const emptyEl = document.getElementById("unpaid-empty");
+    tbody.innerHTML = "";
+    emptyEl.style.display = rows.length === 0 ? "block" : "none";
+
+    rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      if (r.hunter_payout_requested_at) tr.style.background = "color-mix(in srgb, var(--accent) 12%, transparent)";
+      const requestedBadge = r.hunter_payout_requested_at
+        ? `<br><span style="color:var(--accent); font-size:0.72rem">申請あり</span>`
+        : "";
+      tr.innerHTML = `
+        <td>${esc(r.program_company_name)}</td>
+        <td>${esc(r.hunter_handle || "不明")}${requestedBadge}</td>
+        <td>${esc(r.hunter_paypal_link || "未登録")}</td>
+        <td>¥${Number(r.gross_amount).toLocaleString()}</td>
+        <td>¥${Number(r.platform_fee).toLocaleString()}</td>
+        <td>¥${Number(r.net_amount).toLocaleString()}</td>
+        <td><button data-id="${esc(r.id)}">支払い済みにする</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll("button[data-id]").forEach((btn) => {
+      btn.addEventListener("click", () => markPaid(btn.dataset.id));
+    });
+  }
+
+  async function markPaid(reportId) {
+    if (!confirm("この報奨金を「支払い済み」にします。実際にハンターへの送金が完了してから押してください。よろしいですか？")) return;
+    const key = getKey();
+    try {
+      const res = await fetch(`${API_BASE}/admin/reports/${reportId}/paid`, {
+        method: "PATCH",
+        headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+        body: JSON.stringify({}),
       });
+      if (!res.ok) { setStatus("更新に失敗しました"); return; }
+      setStatus("支払い済みにしました");
+      loadAll();
+    } catch (e) {
+      setStatus("更新に失敗しました: " + e.message);
     }
+  }
 
-    function selectChallenge(id) {
-      currentChallenge = challenges.find(c => String(c.id) === String(id));
-      if (!currentChallenge) return;
-      document.querySelectorAll(".challenge-item").forEach(el => el.classList.toggle("active", el.dataset.id === String(id)));
-      renderChallenge();
-    }
+  const TICKET_STATUSES = ["未対応", "対応中", "解決済み"];
 
-    function formatDesc(text) {
-      if (!text) return "";
-      return esc(text).replace(/`([^`]+)`/g, "<code>$1</code>");
-    }
+  function renderTickets(rows) {
+    const tbody = document.querySelector("#tickets-table tbody");
+    const emptyEl = document.getElementById("tickets-empty");
+    const visibleRows = rows.filter((t) => t.status !== "解決済み");
+    tbody.innerHTML = "";
+    emptyEl.style.display = visibleRows.length === 0 ? "block" : "none";
 
-    function renderChallenge() {
-      const ch = currentChallenge;
-      const done = completions.has(String(ch.id));
-      const diffLabel = { easy:"初級", medium:"中級", hard:"上級" }[ch.difficulty] || ch.difficulty;
-      document.getElementById("content-area").innerHTML = `
-        <div class="description-panel">
-          <div class="challenge-title">${esc(ch.title)}</div>
-          <div class="challenge-meta">
-            <span class="diff-badge diff-${esc(ch.difficulty)}">${esc(diffLabel)}</span>
-            <span class="points-badge">${esc(String(ch.points))} pt</span>
-            ${done?'<span style="color:var(--green);font-size:0.85rem">✓ クリア済み</span>':""}
+    visibleRows.forEach((t) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${esc(t.subject)}</td>
+        <td>${esc(t.name)}</td>
+        <td>${esc(t.email)}</td>
+        <td>${esc(t.status)}</td>
+        <td>${fmt(t.created_at)}</td>
+        <td><button data-id="${esc(t.id)}">開く</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll("button[data-id]").forEach((btn) => {
+      btn.addEventListener("click", () => openTicket(btn.dataset.id));
+    });
+  }
+
+  async function openTicket(ticketId) {
+    const key = getKey();
+    const detailEl = document.getElementById("ticket-detail");
+    detailEl.innerHTML = `<p class="status">読み込み中…</p>`;
+    try {
+      const res = await fetch(`${API_BASE}/admin/support/tickets/${ticketId}`, { headers: { "X-Admin-Key": key } });
+      if (!res.ok) { detailEl.innerHTML = `<p class="status">読み込みに失敗しました</p>`; return; }
+      const data = await res.json();
+      const t = data.ticket;
+      const replies = data.replies || [];
+
+      detailEl.innerHTML = `
+        <div class="ticket-panel">
+          <div class="row" style="justify-content:space-between">
+            <strong>${esc(t.subject)}</strong>
+            <span class="status" style="margin:0">${esc(t.name)} (${esc(t.email)})</span>
           </div>
-          <div class="description-text">${formatDesc(ch.description)}</div>
-          <div class="flag-area">
-            <h3>🚩 フラグを入力</h3>
-            ${done
-              ? '<p style="color:var(--green);font-size:0.88rem">✓ このチャレンジはクリア済みです</p>'
-              : `<div class="flag-input-row">
-                  <input class="flag-input" id="flag-input" placeholder="FLAG{...}" autocomplete="off">
-                  <button class="btn-submit" id="flag-submit">送信</button>
-                </div>
-                <p class="flag-result" id="flag-result"></p>`
-            }
+          <div class="thread">
+            <div class="bubble">
+              <div class="bubble-meta">${esc(t.name)} ・ ${fmt(t.created_at)}</div>
+              ${esc(t.message)}
+            </div>
+            ${replies.map((r) => `
+              <div class="bubble${r.author_type === "admin" ? " admin" : ""}">
+                <div class="bubble-meta">${r.author_type === "admin" ? "運営者" : esc(t.name)} ・ ${fmt(r.created_at)}</div>
+                ${esc(r.message)}
+              </div>
+            `).join("")}
+          </div>
+          <div class="row" style="margin-bottom:0.75rem">
+            <select id="ticket-status">
+              ${TICKET_STATUSES.map((s) => `<option value="${s}"${s === t.status ? " selected" : ""}>${s}</option>`).join("")}
+            </select>
+            <button id="ticket-status-save" class="ghost">ステータスを更新</button>
+          </div>
+          <textarea id="ticket-reply-text" rows="4" placeholder="返信内容を入力"></textarea>
+          <div class="row" style="margin-top:0.6rem">
+            <button id="ticket-reply-send">返信を送信</button>
           </div>
         </div>
-        <div class="terminal-panel">
-          <div class="terminal-header">
-            <div class="terminal-dots">
-              <div class="terminal-dot dot-red"></div>
-              <div class="terminal-dot dot-yellow"></div>
-              <div class="terminal-dot dot-green"></div>
-            </div>
-            <span class="terminal-title">hacker@bughunter:~$</span>
-            <button class="terminal-clear-btn" id="term-clear" style="margin-left:auto">クリア</button>
-          </div>
-          <div class="terminal-body" id="terminal-body">
-            <div class="terminal-line terminal-output">bughunter CTF — ${esc(ch.title)}</div>
-            <div class="terminal-line terminal-output">コマンドを入力して問題を解いてください。</div>
-            <div class="terminal-line">&nbsp;</div>
-          </div>
-          <div class="terminal-input-row">
-            <span class="terminal-prompt-label">hacker@target:~$</span>
-            <input class="terminal-input" id="terminal-input" placeholder="コマンドを入力..." autocomplete="off" autocorrect="off" spellcheck="false">
-          </div>
-        </div>`;
+      `;
 
-      const termInput = document.getElementById("terminal-input");
-      const termBody = document.getElementById("terminal-body");
-      cmdHistory = []; historyIdx = -1;
-      termInput.focus();
-
-      termInput.addEventListener("keydown", async (e) => {
-        if (e.key === "Enter") {
-          const cmd = termInput.value.trim();
-          if (!cmd) return;
-          cmdHistory.unshift(cmd); historyIdx = -1; termInput.value = "";
-          await execCommand(cmd, ch.id, termBody);
-        } else if (e.key === "ArrowUp") {
-          e.preventDefault();
-          if (historyIdx < cmdHistory.length - 1) { historyIdx++; termInput.value = cmdHistory[historyIdx]; }
-        } else if (e.key === "ArrowDown") {
-          e.preventDefault();
-          if (historyIdx > 0) { historyIdx--; termInput.value = cmdHistory[historyIdx]; } else { historyIdx = -1; termInput.value = ""; }
-        }
+      document.getElementById("ticket-status-save").addEventListener("click", async () => {
+        const status = document.getElementById("ticket-status").value;
+        const r = await fetch(`${API_BASE}/admin/support/tickets/${ticketId}`, {
+          method: "PATCH",
+          headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        if (r.ok) { setStatus("ステータスを更新しました"); loadAll().then(() => openTicket(ticketId)); }
+        else setStatus("更新に失敗しました");
       });
 
-      document.getElementById("term-clear").addEventListener("click", () => { termBody.innerHTML = ""; });
-
-      if (!done) {
-        const flagInput = document.getElementById("flag-input");
-        const flagSubmit = document.getElementById("flag-submit");
-        const flagResult = document.getElementById("flag-result");
-        flagInput.addEventListener("keydown", (e) => { if (e.key === "Enter") flagSubmit.click(); });
-        flagSubmit.addEventListener("click", async () => {
-          const flag = flagInput.value.trim();
-          if (!flag) return;
-          flagSubmit.disabled = true;
-          if (!sessionToken) {
-            flagResult.textContent = "フラグを記録するにはログインが必要です";
-            flagResult.className = "flag-result wrong";
-            flagSubmit.disabled = false;
-            return;
-          }
-          try {
-            const res = await fetch(`${CTF_API}/challenges/${ch.id}/submit`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
-              body: JSON.stringify({ flag }),
-            });
-            const data = await res.json();
-            if (data.correct) {
-              flagResult.textContent = data.message || "正解！🎉";
-              flagResult.className = "flag-result correct";
-              completions.add(String(ch.id));
-              renderSidebar();
-              document.querySelectorAll(".challenge-item").forEach(el => el.classList.toggle("active", el.dataset.id === String(ch.id)));
-            } else {
-              flagResult.textContent = data.message || "フラグが違います";
-              flagResult.className = "flag-result wrong";
-            }
-          } catch {
-            flagResult.textContent = "送信に失敗しました";
-            flagResult.className = "flag-result wrong";
-          }
-          flagSubmit.disabled = false;
-        });
-      }
-    }
-
-    async function execCommand(cmd, challengeId, termBody) {
-      const cmdLine = document.createElement("div");
-      cmdLine.className = "terminal-line";
-      cmdLine.innerHTML = `<span class="terminal-prompt">hacker@target:~$</span> <span class="terminal-cmd">${esc(cmd)}</span>`;
-      termBody.appendChild(cmdLine);
-      try {
-        const res = await fetch(`${CTF_API}/challenges/${challengeId}/exec`, {
+      document.getElementById("ticket-reply-send").addEventListener("click", async () => {
+        const message = document.getElementById("ticket-reply-text").value.trim();
+        if (!message) return;
+        const r = await fetch(`${API_BASE}/admin/support/tickets/${ticketId}/replies`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: cmd }),
+          headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
         });
-        const data = await res.json();
-        const outLine = document.createElement("div");
-        outLine.className = "terminal-line terminal-output";
-        outLine.textContent = data.output || "";
-        termBody.appendChild(outLine);
-      } catch {
-        const errLine = document.createElement("div");
-        errLine.className = "terminal-line terminal-error";
-        errLine.textContent = "エラー: サーバーへの接続に失敗しました";
-        termBody.appendChild(errLine);
+        if (r.ok) { setStatus("返信しました"); loadAll().then(() => openTicket(ticketId)); }
+        else setStatus("送信に失敗しました");
+      });
+    } catch (e) {
+      detailEl.innerHTML = `<p class="status">読み込みに失敗しました: ${e.message}</p>`;
+    }
+  }
+
+
+  const BADGE_OPTIONS = [
+    { key: "responsive",  label: "Responsive" },
+    { key: "high_reward", label: "High Reward" },
+    { key: "active",      label: "Active 🟢" },
+    { key: "safe_harbor", label: "Safe Harbor" },
+  ];
+
+  function renderProgramsTable(programs) {
+    const tbody = document.querySelector("#programs-table tbody");
+    const emptyEl = document.getElementById("programs-empty");
+    tbody.innerHTML = "";
+    emptyEl.style.display = programs.length === 0 ? "block" : "none";
+
+    programs.forEach((row) => {
+      const currentBadges = (() => { try { return JSON.parse(row.badges || "[]"); } catch { return []; } })();
+      const tr = document.createElement("tr");
+      const checkboxes = BADGE_OPTIONS.map((b) =>
+        `<label style="display:inline-flex;align-items:center;gap:0.2rem;margin-right:0.4rem;font-size:0.8rem;cursor:pointer;">
+          <input type="checkbox" data-badge="${esc(b.key)}" ${currentBadges.includes(b.key) ? "checked" : ""}> ${esc(b.label)}
+        </label>`
+      ).join("");
+
+      tr.innerHTML = `
+        <td class="id">${esc(row.id)}</td>
+        <td>${esc(row.company_name)}</td>
+        <td>${esc(row.contact_email)}</td>
+        <td>${esc(fmt(row.created_at))}</td>
+        <td>
+          <div style="display:flex;flex-wrap:wrap;gap:0.2rem;align-items:center;">
+            ${checkboxes}
+            <button class="badge-save" style="font-size:0.75rem;padding:0.2rem 0.5rem;" data-id="${esc(row.id)}">保存</button>
+          </div>
+        </td>
+        <td><button class="danger" data-type="programs" data-id="${esc(row.id)}">削除</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // バッジ保存ボタン
+    tbody.querySelectorAll("button.badge-save").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        const row = btn.closest("tr");
+        const checked = [...row.querySelectorAll("input[data-badge]:checked")].map((cb) => cb.dataset.badge);
+        const key = getKey();
+        const res = await fetch(`${API_BASE}/admin/programs/${id}/badges`, {
+          method: "PATCH",
+          headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+          body: JSON.stringify({ badges: checked }),
+        });
+        setStatus(res.ok ? "バッジを保存しました" : "バッジの保存に失敗しました");
+      });
+    });
+
+    // 削除ボタン
+    tbody.querySelectorAll("button.danger").forEach((btn) => {
+      btn.addEventListener("click", () => deleteEntry(btn.dataset.type, btn.dataset.id));
+    });
+  }
+
+  function renderTable(type, rows, mapper) {
+    const tbody = document.querySelector(`#${type}-table tbody`);
+    const emptyEl = document.getElementById(`${type}-empty`);
+    tbody.innerHTML = "";
+    emptyEl.style.display = rows.length === 0 ? "block" : "none";
+
+    rows.forEach((row) => {
+      const cells = mapper(row);
+      const tr = document.createElement("tr");
+      const dataCells = cells.map((c, i) => `<td${i === 0 ? ' class="id"' : ""}>${esc(c)}</td>`).join("");
+      tr.innerHTML = `
+        ${dataCells}
+        <td><button class="danger" data-type="${type}" data-id="${esc(row.id)}">削除</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll("button.danger").forEach((btn) => {
+      btn.addEventListener("click", () => deleteEntry(btn.dataset.type, btn.dataset.id));
+    });
+  }
+
+  async function deleteEntry(type, id) {
+    if (!confirm(`この${type === "hunters" ? "ハンター" : "企業"}アカウント（${id}）を削除します。関連するレポート・返信も全て消えます。よろしいですか？`)) return;
+
+    const key = getKey();
+    try {
+      const res = await fetch(`${API_BASE}/admin/${type}/${id}`, {
+        method: "DELETE",
+        headers: { "X-Admin-Key": key },
+      });
+      if (!res.ok) {
+        setStatus("削除に失敗しました");
+        return;
       }
-      const spacer = document.createElement("div");
-      spacer.className = "terminal-line";
-      spacer.innerHTML = "&nbsp;";
-      termBody.appendChild(spacer);
-      termBody.scrollTop = termBody.scrollHeight;
+      setStatus("削除しました");
+      loadAll();
+    } catch (e) {
+      setStatus("削除に失敗しました: " + e.message);
+    }
+  }
+
+  document.getElementById("load-btn").addEventListener("click", loadAll);
+
+  document.getElementById("save-settings-btn").addEventListener("click", async () => {
+    const key = getKey();
+    if (!key) { setStatus("管理者キーを入力してください"); return; }
+    const paypalLink = document.getElementById("settings-paypal").value.trim();
+    const feePercent = Number(document.getElementById("settings-fee").value);
+    const adminEmail = document.getElementById("settings-admin-email").value.trim();
+    try {
+      const res = await fetch(`${API_BASE}/admin/settings`, {
+        method: "PATCH",
+        headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+        body: JSON.stringify({ paypalLink, feePercent, adminEmail }),
+      });
+      if (!res.ok) { setStatus("設定の保存に失敗しました"); return; }
+      setStatus("設定を保存しました");
+      loadAll();
+    } catch (e) {
+      setStatus("設定の保存に失敗しました: " + e.message);
+    }
+  });
+  document.getElementById("admin-key").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") loadAll();
+  });
+
+  // 前回入力したキーを復元（このページ自体は管理者しかアクセスしない前提）
+  const savedKey = localStorage.getItem("bbp_admin_key");
+  if (savedKey) {
+    document.getElementById("admin-key").value = savedKey;
+    loadAll();
+  }
+
+  // =====================================================
+  // CTF 問題管理
+  // =====================================================
+
+  let currentChallengeId = null;
+
+  async function ctfGet(path) {
+    const key = getKey();
+    const res = await fetch(`${CTF_API}${path}`, { headers: { "X-Admin-Key": key } });
+    return res.json();
+  }
+
+  async function ctfPost(path, body) {
+    const key = getKey();
+    const res = await fetch(`${CTF_API}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": key },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  async function ctfPatch(path, body) {
+    const key = getKey();
+    const res = await fetch(`${CTF_API}${path}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": key },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  async function ctfDelete(path) {
+    const key = getKey();
+    const res = await fetch(`${CTF_API}${path}`, {
+      method: "DELETE",
+      headers: { "X-Admin-Key": key },
+    });
+    return res.json();
+  }
+
+  async function loadChallenges() {
+    const data = await ctfGet("/admin/challenges");
+    const challenges = data.challenges || [];
+    const tbody = document.querySelector("#ctf-table tbody");
+    const emptyEl = document.getElementById("ctf-empty");
+    tbody.innerHTML = "";
+    emptyEl.style.display = challenges.length === 0 ? "block" : "none";
+
+    challenges.forEach((ch) => {
+      const tr = document.createElement("tr");
+      const diffLabel = { easy: "初級", medium: "中級", hard: "上級" }[ch.difficulty] || ch.difficulty;
+      tr.innerHTML = `
+        <td class="id">${esc(String(ch.id))}</td>
+        <td>${esc(ch.title)}</td>
+        <td>${esc(diffLabel)}</td>
+        <td>${esc(String(ch.points))}</td>
+        <td>${ch.is_published ? "✅" : "🔒"}</td>
+        <td style="display:flex;gap:0.4rem">
+          <button class="ghost ctf-cmd-btn" data-id="${ch.id}" data-title="${esc(ch.title)}" style="font-size:0.78rem;padding:0.25rem 0.5rem">コマンド</button>
+          <button class="danger ctf-del-btn" data-id="${ch.id}" style="font-size:0.78rem;padding:0.25rem 0.5rem">削除</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll(".ctf-cmd-btn").forEach((btn) => {
+      btn.addEventListener("click", () => openCmdPanel(btn.dataset.id, btn.dataset.title));
+    });
+    tbody.querySelectorAll(".ctf-del-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm(`問題ID:${btn.dataset.id} を削除しますか？`)) return;
+        await ctfDelete(`/admin/challenges/${btn.dataset.id}`);
+        setStatus("問題を削除しました");
+        loadChallenges();
+      });
+    });
+  }
+
+  async function openCmdPanel(challengeId, title) {
+    currentChallengeId = challengeId;
+    document.getElementById("ctf-cmd-title").textContent = `コマンド管理: ${title}`;
+    document.getElementById("ctf-cmd-panel").style.display = "block";
+    await loadCommands();
+  }
+
+  async function loadCommands() {
+    if (!currentChallengeId) return;
+    const data = await ctfGet(`/admin/challenges/${currentChallengeId}/commands`);
+    const commands = data.commands || [];
+    const tbody = document.querySelector("#ctf-cmd-table tbody");
+    const emptyEl = document.getElementById("ctf-cmd-empty");
+    tbody.innerHTML = "";
+    emptyEl.style.display = commands.length === 0 ? "block" : "none";
+
+    commands.forEach((cmd) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="font-family:monospace;font-size:0.8rem">${esc(cmd.command)}</td>
+        <td style="font-size:0.8rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cmd.response)}</td>
+        <td><button class="danger ctf-cmd-del-btn" data-id="${cmd.id}" style="font-size:0.78rem;padding:0.25rem 0.5rem">削除</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll(".ctf-cmd-del-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await ctfDelete(`/admin/commands/${btn.dataset.id}`);
+        document.getElementById("ctf-cmd-status").textContent = "削除しました";
+        loadCommands();
+      });
+    });
+  }
+
+  // 問題追加フォーム
+  document.getElementById("ctf-add-btn").addEventListener("click", () => {
+    document.getElementById("ctf-add-form").style.display = "block";
+  });
+  document.getElementById("ctf-cancel-btn").addEventListener("click", () => {
+    document.getElementById("ctf-add-form").style.display = "none";
+  });
+  document.getElementById("ctf-load-btn").addEventListener("click", loadChallenges);
+
+  document.getElementById("ctf-save-btn").addEventListener("click", async () => {
+    const title = document.getElementById("ctf-title").value.trim();
+    const flag = document.getElementById("ctf-flag").value.trim();
+    const statusEl = document.getElementById("ctf-form-status");
+    if (!title || !flag) { statusEl.textContent = "タイトルとフラグは必須です"; return; }
+
+    const result = await ctfPost("/admin/challenges", {
+      title,
+      description: document.getElementById("ctf-desc").value.trim(),
+      difficulty: document.getElementById("ctf-difficulty").value,
+      category: document.getElementById("ctf-category").value,
+      points: Number(document.getElementById("ctf-points").value) || 10,
+      flag,
+      isPublished: document.getElementById("ctf-published").checked,
+    });
+
+    if (result.id) {
+      statusEl.textContent = `登録しました（ID: ${result.id}）`;
+      document.getElementById("ctf-add-form").style.display = "none";
+      loadChallenges();
+    } else {
+      statusEl.textContent = "登録に失敗しました";
+    }
+  });
+
+  // コマンド追加
+  document.getElementById("ctf-cmd-add-btn").addEventListener("click", async () => {
+    const command = document.getElementById("ctf-cmd-command").value.trim();
+    const response = document.getElementById("ctf-cmd-response").value;
+    const statusEl = document.getElementById("ctf-cmd-status");
+    if (!command || !response) { statusEl.textContent = "コマンドと返答は必須です"; return; }
+
+    await ctfPost(`/admin/challenges/${currentChallengeId}/commands`, {
+      command,
+      response,
+      isExact: document.getElementById("ctf-cmd-exact").checked,
+    });
+
+    document.getElementById("ctf-cmd-command").value = "";
+    document.getElementById("ctf-cmd-response").value = "";
+    statusEl.textContent = "追加しました";
+    loadCommands();
+  });
+
+  // =====================================================
+  // 一括登録
+  // =====================================================
+
+  document.getElementById("ctf-bulk-btn").addEventListener("click", () => {
+    document.getElementById("ctf-bulk-form").style.display = "block";
+  });
+  document.getElementById("ctf-bulk-cancel-btn").addEventListener("click", () => {
+    document.getElementById("ctf-bulk-form").style.display = "none";
+  });
+
+  document.getElementById("ctf-bulk-run-btn").addEventListener("click", async () => {
+    const statusEl = document.getElementById("ctf-bulk-status");
+    const text = document.getElementById("ctf-bulk-json").value.trim();
+    let challenges;
+    try {
+      challenges = JSON.parse(text);
+      if (!Array.isArray(challenges)) throw new Error("配列で入力してください");
+    } catch (e) {
+      statusEl.textContent = "JSONが不正です: " + e.message;
+      return;
     }
 
-    init();
-  </script>
+    statusEl.textContent = "登録中...";
+    let success = 0, fail = 0;
+
+    for (let i = 0; i < challenges.length; i++) {
+      const ch = challenges[i];
+      statusEl.textContent = `[${i+1}/${challenges.length}] "${ch.title}" を登録中...`;
+      const result = await ctfPost("/admin/challenges", {
+        title: ch.title,
+        description: ch.description || "",
+        difficulty: ch.difficulty || "easy",
+        category: ch.category || "curl",
+        flag: ch.flag,
+        points: ch.points || 10,
+        orderIndex: ch.orderIndex || i + 1,
+        isPublished: ch.isPublished !== false,
+      });
+      if (!result.id) { fail++; continue; }
+      for (const cmd of (ch.commands || [])) {
+        await ctfPost(`/admin/challenges/${result.id}/commands`, {
+          command: cmd.command,
+          response: cmd.response,
+          isExact: cmd.isExact !== false,
+        });
+      }
+      success++;
+    }
+
+    statusEl.textContent = `完了！ 成功: ${success}件 / 失敗: ${fail}件`;
+    loadChallenges();
+  });
+
+  document.getElementById("ctf-cmd-close").addEventListener("click", () => {
+    document.getElementById("ctf-cmd-panel").style.display = "none";
+    currentChallengeId = null;
+  });
+</script>
 </body>
 </html>
