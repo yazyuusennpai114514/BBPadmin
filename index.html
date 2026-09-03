@@ -112,6 +112,7 @@
       <textarea id="ctf-bulk-json" rows="12" placeholder='[{"title":"問題名","description":"説明","difficulty":"easy","category":"curl","flag":"FLAG{...}","points":10,"commands":[{"command":"curl http://target.ctf","response":"レスポンス"}]}]'></textarea>
       <div style="display:flex;gap:0.6rem;margin-top:0.75rem;align-items:center">
         <button id="ctf-bulk-run-btn">一括登録する</button>
+        <button id="ctf-bulk-reset-btn" style="background:var(--danger)">🗑 全削除して登録</button>
         <button class="ghost" id="ctf-bulk-cancel-btn">キャンセル</button>
         <span class="status" id="ctf-bulk-status" style="margin:0"></span>
       </div>
@@ -697,8 +698,11 @@
     document.getElementById("ctf-bulk-form").style.display = "none";
   });
 
-  document.getElementById("ctf-bulk-run-btn").addEventListener("click", async () => {
+  document.getElementById("ctf-bulk-reset-btn").addEventListener("click", async () => {
+    if (!confirm("既存の問題・コマンド・クリア記録をすべて削除してから登録します。よろしいですか？")) return;
     const statusEl = document.getElementById("ctf-bulk-status");
+    const btn = document.getElementById("ctf-bulk-reset-btn");
+    const runBtn = document.getElementById("ctf-bulk-run-btn");
     const text = document.getElementById("ctf-bulk-json").value.trim();
     let challenges;
     try {
@@ -709,34 +713,145 @@
       return;
     }
 
-    statusEl.textContent = "登録中...";
-    let success = 0, fail = 0;
+    btn.disabled = true;
+    runBtn.disabled = true;
 
+    // 既存問題を全取得して全削除
+    statusEl.textContent = "既存の問題を取得中...";
+    let existing = [];
+    try {
+      existing = await ctfGet("/admin/challenges");
+      if (!Array.isArray(existing)) existing = [];
+    } catch (e) {
+      statusEl.textContent = "取得失敗: " + e.message;
+      btn.disabled = false; runBtn.disabled = false;
+      return;
+    }
+
+    statusEl.textContent = `${existing.length}件を削除中...`;
+    for (const ch of existing) {
+      await ctfDelete(`/admin/challenges/${ch.id}`).catch(() => {});
+    }
+
+    // 新規登録
+    const errors = [];
+    let success = 0, fail = 0;
     for (let i = 0; i < challenges.length; i++) {
       const ch = challenges[i];
       statusEl.textContent = `[${i+1}/${challenges.length}] "${ch.title}" を登録中...`;
-      const result = await ctfPost("/admin/challenges", {
-        title: ch.title,
-        description: ch.description || "",
-        difficulty: ch.difficulty || "easy",
-        category: ch.category || "curl",
-        flag: ch.flag,
-        points: ch.points || 10,
-        orderIndex: ch.orderIndex || i + 1,
-        isPublished: ch.isPublished !== false,
-      });
-      if (!result.id) { fail++; continue; }
-      for (const cmd of (ch.commands || [])) {
-        await ctfPost(`/admin/challenges/${result.id}/commands`, {
-          command: cmd.command,
-          response: cmd.response,
-          isExact: cmd.isExact !== false,
+      let result;
+      try {
+        result = await ctfPost("/admin/challenges", {
+          title: ch.title,
+          description: ch.description || "",
+          difficulty: ch.difficulty || "easy",
+          category: ch.category || "curl",
+          flag: ch.flag,
+          points: ch.points || 10,
+          orderIndex: ch.orderIndex || i + 1,
+          isPublished: ch.isPublished !== false,
         });
+      } catch (e) {
+        errors.push(`#${i+1} "${ch.title}": ネットワークエラー (${e.message})`);
+        fail++; continue;
+      }
+      if (!result?.id) {
+        errors.push(`#${i+1} "${ch.title}": ${JSON.stringify(result)}`);
+        fail++; continue;
+      }
+      const cmds = ch.commands || [];
+      for (let j = 0; j < cmds.length; j += 5) {
+        const batch = cmds.slice(j, j + 5);
+        await Promise.all(batch.map(cmd =>
+          ctfPost(`/admin/challenges/${result.id}/commands`, {
+            command: cmd.command,
+            response: cmd.response,
+            isExact: cmd.isExact !== false,
+          }).catch(e => errors.push(`  コマンド "${cmd.command}": ${e.message}`))
+        ));
       }
       success++;
     }
 
-    statusEl.textContent = `完了！ 成功: ${success}件 / 失敗: ${fail}件`;
+    btn.disabled = false;
+    runBtn.disabled = false;
+    if (errors.length > 0) {
+      statusEl.innerHTML = `完了！ 成功: ${success}件 / 失敗: ${fail}件<br><small style="color:var(--danger)">${errors.join("<br>")}</small>`;
+    } else {
+      statusEl.textContent = `完了！ 成功: ${success}件 / 失敗: ${fail}件`;
+    }
+    loadChallenges();
+  });
+
+  document.getElementById("ctf-bulk-run-btn").addEventListener("click", async () => {
+    const statusEl = document.getElementById("ctf-bulk-status");
+    const btn = document.getElementById("ctf-bulk-run-btn");
+    const text = document.getElementById("ctf-bulk-json").value.trim();
+    let challenges;
+    try {
+      challenges = JSON.parse(text);
+      if (!Array.isArray(challenges)) throw new Error("配列で入力してください");
+    } catch (e) {
+      statusEl.textContent = "JSONが不正です: " + e.message;
+      return;
+    }
+
+    btn.disabled = true;
+    const errors = [];
+    let success = 0, fail = 0;
+
+    // 問題は1件ずつ順番に登録（コマンドは並列）
+    for (let i = 0; i < challenges.length; i++) {
+      const ch = challenges[i];
+      statusEl.textContent = `[${i+1}/${challenges.length}] "${ch.title}" を登録中...`;
+
+      let result;
+      try {
+        result = await ctfPost("/admin/challenges", {
+          title: ch.title,
+          description: ch.description || "",
+          difficulty: ch.difficulty || "easy",
+          category: ch.category || "curl",
+          flag: ch.flag,
+          points: ch.points || 10,
+          orderIndex: ch.orderIndex || i + 1,
+          isPublished: ch.isPublished !== false,
+        });
+      } catch (e) {
+        errors.push(`#${i+1} "${ch.title}": ネットワークエラー (${e.message})`);
+        fail++;
+        continue;
+      }
+
+      if (!result?.id) {
+        errors.push(`#${i+1} "${ch.title}": ${JSON.stringify(result)}`);
+        fail++;
+        continue;
+      }
+
+      // コマンドを並列登録（最大5並列）
+      const cmds = ch.commands || [];
+      for (let j = 0; j < cmds.length; j += 5) {
+        const batch = cmds.slice(j, j + 5);
+        await Promise.all(batch.map(cmd =>
+          ctfPost(`/admin/challenges/${result.id}/commands`, {
+            command: cmd.command,
+            response: cmd.response,
+            isExact: cmd.isExact !== false,
+          }).catch(e => errors.push(`  コマンド "${cmd.command}": ${e.message}`))
+        ));
+      }
+
+      success++;
+    }
+
+    btn.disabled = false;
+
+    if (errors.length > 0) {
+      statusEl.innerHTML = `完了！ 成功: ${success}件 / 失敗: ${fail}件<br><small style="color:var(--danger)">${errors.join("<br>")}</small>`;
+    } else {
+      statusEl.textContent = `完了！ 成功: ${success}件 / 失敗: ${fail}件`;
+    }
     loadChallenges();
   });
 
