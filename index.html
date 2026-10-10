@@ -14,6 +14,8 @@
     max-width: 900px; margin: 3rem auto; padding: 0 1.5rem;
   }
   h1 { font-family: monospace; font-size: 1.3rem; }
+  /* ログイン（キー認証）前は入力欄以外を一切表示しない */
+  body:not(.authed) h1, body:not(.authed) section { display: none; }
   .key-bar { display: flex; gap: 0.6rem; margin-bottom: 2rem; }
   input { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 0.6rem 0.8rem; border-radius: 6px; flex: 1; font-family: monospace; }
   button { background: var(--accent); color: #1A1204; border: none; padding: 0.6rem 1.1rem; border-radius: 6px; cursor: pointer; font-weight: 600; }
@@ -237,9 +239,17 @@
       ]);
 
       if (programsRes.status === 401 || huntersRes.status === 401 || unpaidRes.status === 401 || settingsRes.status === 401 || ticketsRes.status === 401) {
+        document.body.classList.remove("authed");
+        sessionStorage.removeItem("bbp_admin_key");
         setStatus("キーが正しくありません");
         return;
       }
+      if (!programsRes.ok || !huntersRes.ok || !unpaidRes.ok || !settingsRes.ok || !ticketsRes.ok) {
+        document.body.classList.remove("authed");
+        setStatus("読み込みに失敗しました");
+        return;
+      }
+      document.body.classList.add("authed");
 
       const programs = (await programsRes.json()).programs || [];
       const hunters = (await huntersRes.json()).hunters || [];
@@ -257,6 +267,7 @@
 
       setStatus(`最終更新: ${new Date().toLocaleTimeString("ja-JP")}`);
     } catch (e) {
+      document.body.classList.remove("authed");
       setStatus("読み込みに失敗しました: " + e.message);
     }
   }
