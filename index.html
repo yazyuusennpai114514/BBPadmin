@@ -581,7 +581,7 @@
         statusEl.textContent = "送信失敗: " + (data.error || res.status);
       } else {
         statusEl.textContent = `送信成功 ${data.sent} 件 / 失敗 ${data.failed} 件` +
-          (data.failed ? "（失敗: " + data.results.filter((r) => !r.ok).map((r) => r.to).join(", ") + "）" : "");
+          (data.failed ? "（失敗: " + data.results.filter((r) => !r.ok).map((r) => r.to + " → " + (r.error || "原因不明")).join(" ; ") + "）" : "");
         if (!data.failed) document.getElementById("mail-body").value = "";
       }
     } catch (e) {
