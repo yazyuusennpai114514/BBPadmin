@@ -40,7 +40,7 @@
 <body>
   <h1>BBP Admin</h1>
   <div class="key-bar">
-    <input id="admin-key" type="password" placeholder="管理者キーを入力">
+    <input id="admin-key" type="password" autocomplete="new-password" placeholder="管理者キーを入力">
     <button id="load-btn">読み込む</button>
   </div>
   <p class="status" id="status"></p>
@@ -216,40 +216,106 @@
     div.textContent = s == null ? "" : String(s);
     return div.innerHTML;
   }
-  function getKey() {
+  let authedKey = "";
+  function getInputKey() {
     return document.getElementById("admin-key").value.trim();
+  }
+  // 認証に成功したキーを優先して使う（パスワード自動入力で入力欄が書き換わっても影響しない）
+  function getKey() {
+    return authedKey || getInputKey();
   }
   function setStatus(msg) {
     document.getElementById("status").textContent = msg;
   }
 
+  // ---- ログイン試行回数の制限（画面側）: 5回失敗で5分間ロック。サーバー側でも別途IPごとに制限している ----
+  const LOGIN_MAX_FAILS = 5;
+  const LOGIN_LOCK_MS = 5 * 60 * 1000;
+  const LOGIN_FAIL_WINDOW_MS = 15 * 60 * 1000;
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  let lockTimer = null;
+  function lockRemainingMs() {
+    return Math.max(0, Number(lsGet("bbp_admin_lock_until") || 0) - Date.now());
+  }
+  function showLockCountdown() {
+    const loadBtn = document.getElementById("load-btn");
+    clearInterval(lockTimer);
+    const tick = () => {
+      const left = lockRemainingMs();
+      if (left <= 0) {
+        clearInterval(lockTimer);
+        loadBtn.disabled = false;
+        setStatus("ロックが解除されました。もう一度キーを入力してください");
+        return;
+      }
+      loadBtn.disabled = true;
+      const m = Math.floor(left / 60000), sec = String(Math.floor((left % 60000) / 1000)).padStart(2, "0");
+      setStatus(`試行回数が多すぎます。${m}:${sec} 後に再度お試しください`);
+    };
+    tick();
+    lockTimer = setInterval(tick, 1000);
+  }
+  function recordLoginFailure() {
+    const now = Date.now();
+    let fails = [];
+    try { fails = JSON.parse(lsGet("bbp_admin_fails") || "[]").filter((t) => now - t < LOGIN_FAIL_WINDOW_MS); } catch (e) {}
+    fails.push(now);
+    lsSet("bbp_admin_fails", JSON.stringify(fails));
+    if (fails.length >= LOGIN_MAX_FAILS) {
+      lsSet("bbp_admin_lock_until", String(now + LOGIN_LOCK_MS));
+      lsDel("bbp_admin_fails");
+      showLockCountdown();
+      return true;
+    }
+    setStatus(`キーが正しくありません（あと${LOGIN_MAX_FAILS - fails.length}回でロックされます）`);
+    return false;
+  }
+
   async function loadAll() {
-    const key = getKey();
+    const key = getInputKey();
+    if (lockRemainingMs() > 0) { showLockCountdown(); return; }
     if (!key) { setStatus("管理者キーを入力してください"); return; }
     sessionStorage.setItem("bbp_admin_key", key);
     setStatus("読み込み中…");
 
     try {
-      const [programsRes, huntersRes, unpaidRes, settingsRes, ticketsRes] = await Promise.all([
+      // まずキーの確認を1リクエストだけ行う（間違いがあっても、サーバー側の失敗回数を1回しか消費しない）
+      const settingsRes = await fetch(`${API_BASE}/admin/settings`, { headers: { "X-Admin-Key": key } });
+      if (settingsRes.status === 429) {
+        document.body.classList.remove("authed");
+        authedKey = "";
+        setStatus("試行回数が多すぎます。15分ほど待ってから再度お試しください");
+        return;
+      }
+      if (settingsRes.status === 401) {
+        document.body.classList.remove("authed");
+        authedKey = "";
+        sessionStorage.removeItem("bbp_admin_key");
+        recordLoginFailure();
+        return;
+      }
+      if (!settingsRes.ok) {
+        document.body.classList.remove("authed");
+        setStatus("読み込みに失敗しました");
+        return;
+      }
+      lsDel("bbp_admin_fails");
+
+      const [programsRes, huntersRes, unpaidRes, ticketsRes] = await Promise.all([
         fetch(`${API_BASE}/admin/programs`, { headers: { "X-Admin-Key": key } }),
         fetch(`${API_BASE}/admin/hunters`, { headers: { "X-Admin-Key": key } }),
         fetch(`${API_BASE}/admin/reports/unpaid`, { headers: { "X-Admin-Key": key } }),
-        fetch(`${API_BASE}/admin/settings`, { headers: { "X-Admin-Key": key } }),
         fetch(`${API_BASE}/admin/support/tickets`, { headers: { "X-Admin-Key": key } }),
       ]);
-
-      if (programsRes.status === 401 || huntersRes.status === 401 || unpaidRes.status === 401 || settingsRes.status === 401 || ticketsRes.status === 401) {
-        document.body.classList.remove("authed");
-        sessionStorage.removeItem("bbp_admin_key");
-        setStatus("キーが正しくありません");
-        return;
-      }
-      if (!programsRes.ok || !huntersRes.ok || !unpaidRes.ok || !settingsRes.ok || !ticketsRes.ok) {
+      if (!programsRes.ok || !huntersRes.ok || !unpaidRes.ok || !ticketsRes.ok) {
         document.body.classList.remove("authed");
         setStatus("読み込みに失敗しました");
         return;
       }
       document.body.classList.add("authed");
+      authedKey = key;
 
       const programs = (await programsRes.json()).programs || [];
       const hunters = (await huntersRes.json()).hunters || [];
@@ -543,6 +609,7 @@
   });
 
   // 前回入力したキーを復元（このページ自体は管理者しかアクセスしない前提）
+  if (lockRemainingMs() > 0) showLockCountdown();
   const savedKey = sessionStorage.getItem("bbp_admin_key");
   if (savedKey) {
     document.getElementById("admin-key").value = savedKey;
@@ -578,7 +645,7 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok && !data.results) {
-        statusEl.textContent = "送信失敗: " + (data.error || res.status);
+        statusEl.textContent = "送信失敗: " + (data.error || res.status) + `（HTTP ${res.status} / 送信したキーの文字数 ${key.length} / 宛先API ${API_BASE}）`;
       } else {
         statusEl.textContent = `送信成功 ${data.sent} 件 / 失敗 ${data.failed} 件` +
           (data.failed ? "（失敗: " + data.results.filter((r) => !r.ok).map((r) => r.to + " → " + (r.error || "原因不明")).join(" ; ") + "）" : "");
